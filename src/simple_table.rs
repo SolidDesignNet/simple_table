@@ -12,20 +12,20 @@ use fltk::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub trait SimpleModel<ROW> {
-    fn set_table(&self, table: Rc<RefCell<SimpleTable<ROW>>>) -> ();
+pub trait SimpleModel {
+    fn set_table(&self, table: Rc<RefCell<SimpleTable>>) -> ();
     fn row_count(&self) -> usize;
     fn column_count(&self) -> usize;
     fn header(&self, col: usize) -> String;
     fn column_width(&self, col: usize) -> u32;
     fn cell(&self, row: i32, col: i32) -> Option<String>;
 }
-pub struct SimpleTable<ROW> {
+pub struct SimpleTable {
     pub table: Table,
-    pub model: Rc<RefCell<dyn SimpleModel<ROW>>>,
+    pub model: Rc<RefCell<dyn SimpleModel>>,
 }
 
-impl<ROW: 'static> SimpleTable<ROW> {
+impl SimpleTable {
     fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
         println!("header {}", txt);
         draw::push_clip(x, y, w, h);
@@ -57,7 +57,7 @@ impl<ROW: 'static> SimpleTable<ROW> {
         draw::pop_clip();
     }
 
-    pub fn new(model: Rc<RefCell<dyn SimpleModel<ROW>>>) -> SimpleTable<ROW> {
+    pub fn new(model: Rc<RefCell<dyn SimpleModel>>) -> SimpleTable {
         let mut simple_table = SimpleTable {
             table: Table::default_fill(),
             model,
@@ -69,6 +69,7 @@ impl<ROW: 'static> SimpleTable<ROW> {
 
     fn init(&mut self) {
         let m = self.model.borrow_mut();
+        m.set_table(self.table);
         self.table.set_cols(m.column_count() as i32);
         self.table.set_col_header(true);
         for i in 0..m.column_count() {
@@ -78,7 +79,7 @@ impl<ROW: 'static> SimpleTable<ROW> {
 
         let simple_model = self.model.clone();
         self.table.draw_cell(move |t, ctx, row, col, x, y, w, h| {
-            println!("draw cell {:?} {} {}", ctx, row, col);
+            //println!("draw cell {:?} {} {}", ctx, row, col);
             match ctx {
                 TableContext::StartPage => draw::set_font(enums::Font::Helvetica, 14),
                 TableContext::ColHeader => {

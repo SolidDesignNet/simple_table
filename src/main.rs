@@ -13,15 +13,10 @@ use simple_table::{SimpleModel, SimpleTable};
 
 mod simple_table;
 
-struct Person {
-    first: String,
-    age: i32,
-}
-
 struct PersonModel {}
 
-impl SimpleModel<Person> for PersonModel {
-    fn set_table(&self, table: Rc<RefCell<simple_table::SimpleTable<Person>>>) -> () {
+impl SimpleModel for PersonModel {
+    fn set_table(&self, table: Rc<RefCell<simple_table::SimpleTable>>) -> () {
         todo!()
     }
 
