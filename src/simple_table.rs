@@ -1,9 +1,3 @@
-/*
-main -> Rc<RefCell<SimpleTable>> <-> model
-                                 <-> UI
-
-*/
-
 use fltk::{
     draw, enums,
     prelude::{GroupExt, TableExt, WidgetBase, WidgetExt},
@@ -27,7 +21,6 @@ pub struct SimpleTable {
 
 impl SimpleTable {
     fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
-        println!("header {}", txt);
         draw::push_clip(x, y, w, h);
         draw::draw_box(
             enums::FrameType::ThinUpBox,
@@ -80,7 +73,6 @@ impl SimpleTable {
 
         let simple_model = self.model.clone();
         table.draw_cell(move |t, ctx, row, col, x, y, w, h| {
-            //println!("draw cell {:?} {} {}", ctx, row, col);
             match ctx {
                 TableContext::StartPage => draw::set_font(enums::Font::Helvetica, 14),
                 TableContext::ColHeader => {
@@ -103,11 +95,9 @@ impl SimpleTable {
         table.end();
     }
     pub fn redraw(&mut self) {
-        println!("redrawning");
         let row_count = self.model.borrow().row_count() as i32;
         let mut table = self.table.borrow_mut();
         table.set_rows(row_count);
         table.redraw();
-        println!("redrawn");
     }
 }
