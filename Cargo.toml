@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 fltk = "^1.2"
-fltk-evented = "0.1"
