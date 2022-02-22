@@ -16,7 +16,7 @@ struct PersonModel {
 
 struct Person {
     name: &'static str,
-    age: u32,
+    age: u32
 }
 
 impl SimpleModel for PersonModel {

@@ -75,17 +75,27 @@ impl SimpleTable {
         table.draw_cell(move |t, ctx, row, col, x, y, w, h| {
             match ctx {
                 TableContext::StartPage => draw::set_font(enums::Font::Helvetica, 14),
-                TableContext::ColHeader => {
-                    if let Some(s) = simple_model.borrow_mut().cell(row, col) {
-                        Self::draw_header(s.as_str(), x, y, w, h)
-                    }
-                }
+                TableContext::ColHeader => Self::draw_header(
+                    simple_model.borrow_mut().header(col as usize).as_str(),
+                    x,
+                    y,
+                    w,
+                    h,
+                ),
                 //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                 TableContext::RowHeader => {}
-                TableContext::Cell => {
-                    let txt = simple_model.borrow_mut().cell(row, col).unwrap_or_default();
-                    Self::draw_data(txt.as_str(), x, y, w, h, t.is_selected(row, col));
-                }
+                TableContext::Cell => Self::draw_data(
+                    simple_model
+                        .borrow_mut()
+                        .cell(row, col)
+                        .unwrap_or_default()
+                        .as_str(),
+                    x,
+                    y,
+                    w,
+                    h,
+                    t.is_selected(row, col),
+                ),
                 TableContext::None => {}
                 TableContext::EndPage => {}
                 TableContext::Table => {}
