@@ -7,15 +7,15 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub trait SimpleModel {
-    fn set_table(&self, table: &SimpleTable) -> ();
-    fn row_count(&self) -> usize;
-    fn column_count(&self) -> usize;
-    fn header(&self, col: usize) -> String;
-    fn column_width(&self, col: usize) -> u32;
-    fn cell(&self, row: i32, col: i32) -> Option<String>;
+    fn set_table(&mut self, table: Rc<RefCell<SimpleTable>>) -> ();
+    fn row_count(&mut self) -> usize;
+    fn column_count(&mut self) -> usize;
+    fn header(&mut self, col: usize) -> String;
+    fn column_width(&mut self, col: usize) -> u32;
+    fn cell(&mut self, row: i32, col: i32) -> Option<String>;
 }
 pub struct SimpleTable {
-    pub table: Rc<RefCell<Table>>,
+    pub table: Table,
     pub model: Rc<RefCell<dyn SimpleModel>>,
 }
 
@@ -50,24 +50,31 @@ impl SimpleTable {
         draw::pop_clip();
     }
 
-    pub fn new(model: Rc<RefCell<dyn SimpleModel>>) -> SimpleTable {
-        let mut simple_table = SimpleTable {
-            table: Rc::new(RefCell::new(Table::default_fill())),
-            model,
-        };
+    pub fn new<T: 'static + SimpleModel>(model: T) -> Rc<RefCell<SimpleTable>> {
+        let table_reference = Rc::new(RefCell::new(SimpleTable {
+            table: Table::default_fill(),
+            model: Rc::new(RefCell::new(model)),
+        }));
+
+        // setup the controversial cycle of view <-> model
+        let rc = table_reference.clone();
+        let mut simple_table = rc.borrow_mut();
+        simple_table.model.borrow_mut().set_table(table_reference.clone());
+
         simple_table.init();
         simple_table.redraw();
-        simple_table
+
+        table_reference
     }
 
     fn init(&mut self) {
-        let m = self.model.borrow_mut();
-        m.set_table(self);
-        let mut table = self.table.borrow_mut();
-        table.set_cols(m.column_count() as i32);
+        let mut model = self.model.borrow_mut();
+        let table = &mut self.table;
+        
+        table.set_cols(model.column_count() as i32);
         table.set_col_header(true);
-        for i in 0..m.column_count() {
-            table.set_col_width(i as i32, m.column_width(i) as i32);
+        for i in 0..model.column_count() {
+            table.set_col_width(i as i32, model.column_width(i) as i32);
         }
         table.set_col_resize(true);
 
@@ -105,9 +112,8 @@ impl SimpleTable {
         table.end();
     }
     pub fn redraw(&mut self) {
-        let row_count = self.model.borrow().row_count() as i32;
-        let mut table = self.table.borrow_mut();
-        table.set_rows(row_count);
-        table.redraw();
+        let row_count = self.model.borrow_mut().row_count() as i32;
+        self.table.set_rows(row_count);
+        self.table.redraw();
     }
 }

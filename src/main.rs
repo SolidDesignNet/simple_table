@@ -10,40 +10,43 @@ use simple_table::{SimpleModel, SimpleTable};
 
 mod simple_table;
 
-struct PersonModel {
-    people: Vec<Person>,
-}
-
+// Example BusinessObject representing a row
 struct Person {
     name: &'static str,
-    age: u32
+    age: u32,
+}
+
+struct PersonModel {
+    people: Vec<Person>,
+    table: Option<Rc<RefCell<SimpleTable>>>,
 }
 
 impl SimpleModel for PersonModel {
-    fn set_table(&self, _table: &SimpleTable) -> () {
-        //todo!()
+    fn set_table(&mut self, table: Rc<RefCell<SimpleTable>>) -> () {
+        self.table = Some(table);
     }
 
-    fn row_count(&self) -> usize {
+    fn row_count(&mut self) -> usize {
         self.people.len()
     }
 
-    fn column_count(&self) -> usize {
+    fn column_count(&mut self) -> usize {
         2
     }
 
-    fn header(&self, col: usize) -> String {
+    fn header(&mut self, col: usize) -> String {
         match col {
             0 => "name".to_string(),
-            _ => "age".to_string(),
+            1 => "age".to_string(),
+            _ => "XXX".to_string(),
         }
     }
 
-    fn column_width(&self, _col: usize) -> u32 {
+    fn column_width(&mut self, _col: usize) -> u32 {
         50
     }
 
-    fn cell(&self, row: i32, col: i32) -> Option<String> {
+    fn cell(&mut self, row: i32, col: i32) -> Option<String> {
         match col {
             0 => Some(self.people[row as usize].name.to_string()),
             1 => Some(self.people[row as usize].age.to_string()),
@@ -78,7 +81,10 @@ fn main() {
     let mut pack = Pack::default().with_size(200, 300).center_of(&wind);
     pack.set_spacing(10);
     let scroll = Scroll::default_fill();
-    let _table = SimpleTable::new(Rc::new(RefCell::new(PersonModel { people })));
+    SimpleTable::new(PersonModel {
+        people,
+        table: None,
+    });
     scroll.end();
 
     pack.end();
