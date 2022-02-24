@@ -6,9 +6,7 @@ use fltk::{
     prelude::*,
     window::Window,
 };
-use simple_table::{SimpleModel, SimpleTable};
-
-mod simple_table;
+use simple_table::simple_table::*;
 
 // Example BusinessObject representing a row
 struct Person {
