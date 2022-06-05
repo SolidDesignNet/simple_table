@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use fltk::{
     app,
     group::{Pack, Scroll},
@@ -16,14 +14,9 @@ struct Person {
 
 struct PersonModel {
     people: Vec<Person>,
-    table: Option<Rc<RefCell<SimpleTable>>>,
 }
 
 impl SimpleModel for PersonModel {
-    fn set_table(&mut self, table: Rc<RefCell<SimpleTable>>) -> () {
-        self.table = Some(table);
-    }
-
     fn row_count(&mut self) -> usize {
         self.people.len()
     }
@@ -79,10 +72,8 @@ fn main() {
     let mut pack = Pack::default().with_size(200, 300).center_of(&wind);
     pack.set_spacing(10);
     let scroll = Scroll::default_fill();
-    SimpleTable::new(PersonModel {
-        people,
-        table: None,
-    });
+    let mut model = PersonModel { people };
+    SimpleTable::new(&mut model);
     scroll.end();
 
     pack.end();
