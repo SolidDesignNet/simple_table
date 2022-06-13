@@ -82,17 +82,13 @@ impl<T: 'static + SimpleModel> SimpleTable<T> {
                     match ctx {
                         TableContext::StartPage => draw::set_font(enums::Font::Helvetica, 14),
                         TableContext::ColHeader => {
-                            let mut lock = model.lock().unwrap();
-                            let txt = lock.header(col as usize);
-                            drop(lock);
+                            let txt = model.lock().unwrap().header(col as usize);
                             draw_header(&txt, x, y, w, h)
                         }
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let mut lock = model.lock().unwrap();
-                            let cell = lock.cell(row, col);
-                            drop(lock);
+                            let cell = model.lock().unwrap().cell(row, col);
                             draw_data(
                                 cell.unwrap_or_default().as_str(),
                                 x,
@@ -115,9 +111,7 @@ impl<T: 'static + SimpleModel> SimpleTable<T> {
     }
 
     pub fn redraw(&mut self) {
-        let mut lock = self.model.lock().unwrap();
-        let row_count = lock.row_count() as i32;
-        drop(lock);
+        let row_count = self.model.lock().unwrap().row_count() as i32;
         self.table.set_rows(row_count);
         fltk::app::awake();
     }
