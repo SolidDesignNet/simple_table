@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use fltk::{
     app,
     group::{Pack, Scroll},
@@ -5,6 +7,7 @@ use fltk::{
     window::Window,
 };
 use simple_table::simple_table::*;
+use timer::Timer;
 
 // Example BusinessObject representing a row
 struct Person {
@@ -14,11 +17,14 @@ struct Person {
 
 struct PersonModel {
     people: Vec<Person>,
+    start: Instant,
 }
 
 impl SimpleModel for PersonModel {
     fn row_count(&mut self) -> usize {
-        self.people.len()
+        //self.people.len()
+        // demonstration of dynamic size
+        Instant::now().duration_since(self.start).as_secs() as usize
     }
 
     fn column_count(&mut self) -> usize {
@@ -38,47 +44,60 @@ impl SimpleModel for PersonModel {
     }
 
     fn cell(&mut self, row: i32, col: i32) -> Option<String> {
-        match col {
-            0 => Some(self.people[row as usize].name.to_string()),
-            1 => Some(self.people[row as usize].age.to_string()),
-            _ => None,
+        if row >= self.people.len() as i32 {
+            // make up data outside of defined range
+            match col {
+                0 => Some(row.to_string()),
+                1 => Some((row * row).to_string()),
+                _ => None,
+            }
+        } else {
+            match col {
+                0 => Some(self.people[row as usize].name.to_string()),
+                1 => Some(self.people[row as usize].age.to_string()),
+                _ => None,
+            }
         }
     }
 }
 
 fn main() {
-    let people = vec![
-        Person {
-            name: "Joe",
-            age: 50,
-        },
-        Person {
-            name: "Bob",
-            age: 35,
-        },
-        Person {
-            name: "Mary",
-            age: 35,
-        },
-        Person {
-            name: "Judy",
-            age: 25,
-        },
-    ];
-
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");
-    // Vertical is default. You can choose horizontal using pack.set_type(PackType::Horizontal);
     let mut pack = Pack::default().with_size(200, 300).center_of(&wind);
     pack.set_spacing(10);
     let scroll = Scroll::default_fill();
-    let mut model = PersonModel { people };
-    SimpleTable::new(&mut model);
+    let mut table = SimpleTable::new(PersonModel {
+        people: vec![
+            Person {
+                name: "Joe",
+                age: 50,
+            },
+            Person {
+                name: "Bob",
+                age: 35,
+            },
+            Person {
+                name: "Mary",
+                age: 35,
+            },
+            Person {
+                name: "Judy",
+                age: 25,
+            },
+        ],
+        start: Instant::now(),
+    });
     scroll.end();
 
     pack.end();
     wind.end();
     wind.show();
 
+    let timer = Timer::new();
+    let g = timer.schedule_repeating(chrono::Duration::milliseconds(200), move || {
+        table.redraw();
+    });
     app.run().unwrap();
+    drop(g);
 }
