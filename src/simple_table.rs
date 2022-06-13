@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use fltk::{
-    draw,
-    enums::{self, Damage},
+    draw, enums,
     prelude::{GroupExt, TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
@@ -15,8 +14,8 @@ pub trait SimpleModel {
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
 }
 pub struct SimpleTable<T: SimpleModel> {
-    pub table: Table,
-    pub model: Arc<Mutex<T>>,
+    table: Table,
+    model: Arc<Mutex<T>>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -120,7 +119,6 @@ impl<T: 'static + SimpleModel> SimpleTable<T> {
         let row_count = lock.row_count() as i32;
         drop(lock);
         self.table.set_rows(row_count);
-        self.table.set_damage_type(Damage::All);
         fltk::app::awake();
     }
 }
