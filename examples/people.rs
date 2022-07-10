@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std:: time::Instant;
 
 use fltk::{
     app,
@@ -91,10 +91,10 @@ fn main() {
     let mut pack = Pack::default().with_size(200, 300).center_of(&wind);
     pack.set_spacing(10);
     let scroll = Scroll::default_fill();
-    let mut table = SimpleTable::new(PersonModel {
+    let mut table = SimpleTable::new(Box::new(PersonModel {
         people,
         start: Instant::now(),
-    });
+    }));
     scroll.end();
     pack.end();
     wind.end();

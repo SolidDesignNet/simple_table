@@ -13,9 +13,9 @@ pub trait SimpleModel {
     fn column_width(&mut self, col: usize) -> u32;
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
 }
-pub struct SimpleTable<T: SimpleModel> {
+pub struct SimpleTable {
     table: Table,
-    model: Arc<Mutex<T>>,
+    model: Arc<Mutex<Box<dyn SimpleModel>>>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -48,8 +48,8 @@ fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
     draw::pop_clip();
 }
 
-impl<T: 'static + SimpleModel> SimpleTable<T> {
-    pub fn new(mut model: T) -> SimpleTable<T> {
+impl SimpleTable {
+    pub fn new(mut model: Box<dyn SimpleModel>) -> SimpleTable {
         // initialize table
         let mut table = Table::default_fill();
         {
@@ -111,8 +111,9 @@ impl<T: 'static + SimpleModel> SimpleTable<T> {
     }
 
     pub fn redraw(&mut self) {
-        let row_count = self.model.lock().unwrap().row_count() as i32;
-        self.table.set_rows(row_count);
+        let mut simple_model = self.model.lock().unwrap();
+        self.table.set_rows(simple_model.row_count() as i32);
+        self.table.set_cols(simple_model.column_count() as i32);
         fltk::app::awake();
     }
 }
