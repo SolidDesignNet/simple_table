@@ -14,8 +14,8 @@ pub trait SimpleModel {
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
 }
 pub struct SimpleTable {
-    table: Table,
-    model: Arc<Mutex<Box<dyn SimpleModel>>>,
+    pub table: Table,
+    pub model: Arc<Mutex<Box<dyn SimpleModel>>>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
