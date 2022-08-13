@@ -62,7 +62,6 @@ impl SimpleTable {
         }
 
         table.end();
-        table.redraw();
 
         let mut simple_table = SimpleTable {
             table: table,
@@ -88,15 +87,16 @@ impl SimpleTable {
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let cell = model.lock().unwrap().cell(row, col);
-                            draw_data(
-                                cell.unwrap_or_default().as_str(),
-                                x,
-                                y,
-                                w,
-                                h,
-                                t.is_selected(row, col),
-                            )
+                            let mut simple_model = model.lock().unwrap();
+                            let cell = simple_model.cell(row, col);
+                            let value = cell.unwrap_or_default();
+                            let str = value.as_str();
+                            let height = draw::height() * (1 + str.matches("\n").count() as i32);
+                            if height > h {
+                                t.set_row_height(row, height);
+                                t.set_damage(true);
+                            }
+                            draw_data(str, x, y, w, h, t.is_selected(row, col));
                         }
                         TableContext::None => {}
                         TableContext::EndPage => {}
@@ -106,6 +106,7 @@ impl SimpleTable {
                 },
             );
         }
+        simple_table.redraw();
         simple_table.redraw();
         simple_table
     }
