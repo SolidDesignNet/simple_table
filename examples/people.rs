@@ -1,4 +1,4 @@
-use std:: time::Instant;
+use std::time::Instant;
 
 use fltk::{
     app,
@@ -76,7 +76,7 @@ fn main() {
             age: 35,
         },
         Person {
-            name: "Mary",
+            name: "Mary Sue\n Goldstien\n Oquendo\nSmith Orthope",
             age: 35,
         },
         Person {

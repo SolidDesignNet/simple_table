@@ -13,9 +13,10 @@ pub trait SimpleModel {
     fn column_width(&mut self, col: usize) -> u32;
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
 }
+
 pub struct SimpleTable {
     pub table: Table,
-    pub model: Arc<Mutex<Box<dyn SimpleModel>>>,
+    pub model: Arc<Mutex<Box<dyn SimpleModel+Send>>>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -49,7 +50,7 @@ fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
 }
 
 impl SimpleTable {
-    pub fn new(mut model: Box<dyn SimpleModel>) -> SimpleTable {
+    pub fn new(mut model: Box<dyn SimpleModel+Send>) -> SimpleTable {
         // initialize table
         let mut table = Table::default_fill();
         {
@@ -107,9 +108,13 @@ impl SimpleTable {
             );
         }
         simple_table.redraw();
-        simple_table.redraw();
         simple_table
     }
+    
+    pub fn reset(&mut self) {
+         TableExt::clear(&mut self.table);
+         self.redraw();
+     }
 
     pub fn redraw(&mut self) {
         let mut simple_model = self.model.lock().unwrap();
