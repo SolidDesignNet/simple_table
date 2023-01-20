@@ -16,7 +16,7 @@ pub trait SimpleModel {
 
 pub struct SimpleTable {
     pub table: Table,
-    pub model: Arc<Mutex<Box<dyn SimpleModel+Send>>>,
+    pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -50,7 +50,7 @@ fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
 }
 
 impl SimpleTable {
-    pub fn new(mut model: Box<dyn SimpleModel+Send>) -> SimpleTable {
+    pub fn new(mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
         // initialize table
         let mut table = Table::default_fill();
         {
@@ -88,9 +88,7 @@ impl SimpleTable {
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let mut simple_model = model.lock().unwrap();
-                            let cell = simple_model.cell(row, col);
-                            let value = cell.unwrap_or_default();
+                            let value = model.lock().unwrap().cell(row, col).unwrap_or_default();
                             let str = value.as_str();
                             let height = draw::height() * (1 + str.matches("\n").count() as i32);
                             if height > h {
@@ -110,16 +108,19 @@ impl SimpleTable {
         simple_table.redraw();
         simple_table
     }
-    
+
     pub fn reset(&mut self) {
-         TableExt::clear(&mut self.table);
-         self.redraw();
-     }
+        TableExt::clear(&mut self.table);
+        self.redraw();
+    }
 
     pub fn redraw(&mut self) {
-        let mut simple_model = self.model.lock().unwrap();
-        self.table.set_rows(simple_model.row_count() as i32);
-        self.table.set_cols(simple_model.column_count() as i32);
+        let (rc, cc) = {
+            let mut simple_model = self.model.lock().unwrap();
+            (simple_model.row_count(), simple_model.column_count())
+        };
+        self.table.set_rows(rc as i32);
+        self.table.set_cols(cc as i32);
         fltk::app::awake();
     }
 }
