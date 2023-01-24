@@ -26,7 +26,7 @@ impl SimpleModel for PersonModel {
     fn row_count(&mut self) -> usize {
         //self.people.len()
         // demonstration of dynamic size
-        Instant::now().duration_since(self.start).as_secs() as usize
+        Instant::now().duration_since(self.start).as_millis() as usize / 200
     }
 
     fn column_count(&mut self) -> usize {
@@ -41,8 +41,11 @@ impl SimpleModel for PersonModel {
         }
     }
 
-    fn column_width(&mut self, _col: usize) -> u32 {
-        80
+    fn column_width(&mut self, col: usize) -> u32 {
+        match col {
+            0 => 120,
+            _ => 60,
+        }
     }
 
     fn cell(&mut self, row: i32, col: i32) -> Option<String> {
@@ -102,13 +105,10 @@ fn main() {
 
     // repaint the table on a schedule, to demonstrate updating models.
     let timer = Timer::new(); // requires variable, so that it isn't dropped.
-    let redraw_task = timer.schedule_repeating(chrono::Duration::milliseconds(200), move || {
+    let _redraw_task = timer.schedule_repeating(chrono::Duration::milliseconds(200), move || {
         table.redraw();
     });
 
     // run the app
     app.run().unwrap();
-
-    // reference the guard to enforce the scope
-    drop(redraw_task);
 }

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use fltk::{
     draw, enums,
@@ -65,11 +68,12 @@ impl SimpleTable {
         table.end();
 
         let mut simple_table = SimpleTable {
-            table: table,
+            table,
             model: Arc::new(Mutex::new(model)),
         };
         {
             let model = simple_table.model.clone();
+            let mut row_heights: HashMap<i32, i32> = HashMap::new();
             simple_table.table.draw_cell(
                 move |t: &mut Table,
                       ctx: TableContext,
@@ -90,17 +94,23 @@ impl SimpleTable {
                         TableContext::Cell => {
                             let value = model.lock().unwrap().cell(row, col).unwrap_or_default();
                             let str = value.as_str();
-                            let height = draw::height() * (1 + str.matches("\n").count() as i32);
-                            if height > h {
-                                t.set_row_height(row, height);
+                            let calc_height =
+                                draw::height() * (1 + str.matches("\n").count() as i32);
+                            let height = row_heights.get(&row).map(|x| *x);
+                            if height.is_none() || calc_height > height.unwrap() {
+                                //Row height for all cells in row
+                                t.set_row_height(row, calc_height);
                                 t.set_damage(true);
+                                row_heights.insert(row, calc_height);
                             }
                             draw_data(str, x, y, w, h, t.is_selected(row, col));
                         }
                         TableContext::None => {}
                         TableContext::EndPage => {}
                         TableContext::Table => {}
-                        TableContext::RcResize => {}
+                        TableContext::RcResize => {
+                            row_heights.clear();
+                        }
                     }
                 },
             );
