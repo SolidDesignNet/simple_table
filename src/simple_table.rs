@@ -4,7 +4,8 @@ use std::{
 };
 
 use fltk::{
-    draw, enums,
+    draw,
+    enums::{self, Font},
     prelude::{GroupExt, TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
@@ -19,6 +20,8 @@ pub trait SimpleModel {
 
 pub struct SimpleTable {
     pub table: Table,
+    font: Font,
+    font_size: i32,
     pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
 }
 
@@ -47,7 +50,8 @@ fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
     }
     draw::draw_rectf(x, y, w, h);
     draw::set_draw_color(enums::Color::Gray0);
-    draw::draw_text2(txt, x, y, w, h, enums::Align::Center);
+    draw::draw_text2(txt, x, y, w, h, enums::Align::Left);
+    draw::set_draw_color(enums::Color::Light3);
     draw::draw_rect(x, y, w, h);
     draw::pop_clip();
 }
@@ -69,10 +73,14 @@ impl SimpleTable {
 
         let mut simple_table = SimpleTable {
             table,
+            font: enums::Font::Courier,
+            font_size: 12,
             model: Arc::new(Mutex::new(model)),
         };
         {
             let model = simple_table.model.clone();
+            let font = simple_table.font;
+            let font_size = simple_table.font_size;
             let mut row_heights: HashMap<i32, i32> = HashMap::new();
             simple_table.table.draw_cell(
                 move |t: &mut Table,
@@ -84,7 +92,7 @@ impl SimpleTable {
                       w: i32,
                       h: i32| {
                     match ctx {
-                        TableContext::StartPage => draw::set_font(enums::Font::Helvetica, 14),
+                        TableContext::StartPage => draw::set_font(font, font_size),
                         TableContext::ColHeader => {
                             let txt = model.lock().unwrap().header(col as usize);
                             draw_header(&txt, x, y, w, h)
@@ -123,7 +131,10 @@ impl SimpleTable {
         TableExt::clear(&mut self.table);
         self.redraw();
     }
-
+    pub fn set_font(&mut self, font: enums::Font, size: i32) {
+        self.font = font;
+        self.font_size = size;
+    }
     pub fn redraw(&mut self) {
         let (rc, cc) = {
             let mut simple_model = self.model.lock().unwrap();
