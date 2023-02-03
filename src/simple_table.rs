@@ -6,7 +6,7 @@ use std::{
 use fltk::{
     draw,
     enums::{self, Font},
-    prelude::{GroupExt, TableExt, WidgetBase, WidgetExt},
+    prelude::{GroupExt, TableExt, WidgetExt},
     table::{Table, TableContext},
 };
 
@@ -57,9 +57,9 @@ fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
 }
 
 impl SimpleTable {
-    pub fn new(mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
+    pub fn new(mut table: Table, mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
         // initialize table
-        let mut table = Table::default_fill();
+        //let mut table = Table::default();
         {
             table.set_cols(model.column_count() as i32);
             table.set_col_header(true);
