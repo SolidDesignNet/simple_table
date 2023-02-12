@@ -10,7 +10,7 @@ use fltk::{
     table::{Table, TableContext},
 };
 
-pub trait SimpleModel {
+pub trait SimpleModel: Send {
     fn row_count(&mut self) -> usize;
     fn column_count(&mut self) -> usize;
     fn header(&mut self, col: usize) -> String;
