@@ -1,9 +1,9 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
-use chrono::Duration;
 use fltk::{
     draw,
     enums::{self, Font},
@@ -21,9 +21,11 @@ pub trait SimpleModel: Send {
 
 pub struct SimpleTable {
     pub table: Table,
+    pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
+
     font: Font,
     font_size: i32,
-    pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
+
     repaint_timer: Option<timer::Guard>,
 }
 
@@ -146,13 +148,14 @@ impl SimpleTable {
 
     /// Redraw using a timer.  When the table is dropped, the timer task will be dropped.
     /// The Timer is passed in, so multiple events can share the timer.
-    pub fn redraw_on(&mut self, timer: &timer::Timer, duration: Duration) {
+    pub fn redraw_on(&mut self, timer: &timer::Timer, duration: chrono::Duration) {
+        eprintln!("redraw_on(timer,{:?})", duration);
         let mutex = self.model.clone();
         let table = self.table.clone();
-        self.repaint_timer
-            .replace(timer.schedule_repeating(duration, move || {
-                redraw_impl(mutex.clone(), table.clone());
-            }));
+        self.repaint_timer = Some(timer.schedule_repeating(duration, move || {
+            eprintln!("redrawing");
+            redraw_impl(mutex.clone(), table.clone());
+        }));
     }
 }
 
@@ -164,5 +167,28 @@ fn redraw_impl(mutex: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table)
     };
     table.set_rows(rc as i32);
     table.set_cols(cc as i32);
+    table.set_damage(true); // FIXME verify that it's requiredS
     fltk::app::awake();
+}
+
+#[test]
+pub fn test_timer_guard() {
+    let timer = timer::Timer::new();
+    let mut o: Option<timer::Guard> = None;
+    let c = Arc::new(Mutex::new(0));
+    {
+        let c = c.clone();
+        let g = timer.schedule_repeating(chrono::Duration::milliseconds(500), move || {
+            eprintln!("loop {:?}", c.clone());
+            let mut lock = c.lock().unwrap();
+            if *lock < 4 {
+                *lock = *lock + 1;
+            }
+        });
+        o.replace(g);
+    }
+    eprintln!("waiting...{:?}", o.is_some());
+    std::thread::sleep(core::time::Duration::from_secs(3));
+    eprintln!("done waiting...{:?}", o.is_some());
+    assert_eq!(4, *c.lock().unwrap());
 }
