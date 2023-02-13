@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use chrono::Duration;
 use fltk::{
     draw,
     enums::{self, Font},
@@ -23,6 +24,7 @@ pub struct SimpleTable {
     font: Font,
     font_size: i32,
     pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
+    repaint_timer: Option<timer::Guard>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -76,6 +78,7 @@ impl SimpleTable {
             font: enums::Font::Courier,
             font_size: 12,
             model: Arc::new(Mutex::new(model)),
+            repaint_timer: None,
         };
         {
             let model = simple_table.model.clone();
@@ -136,12 +139,25 @@ impl SimpleTable {
         self.font_size = size;
     }
     pub fn redraw(&mut self) {
-        let (rc, cc) = {
-            let mut simple_model = self.model.lock().unwrap();
-            (simple_model.row_count(), simple_model.column_count())
-        };
-        self.table.set_rows(rc as i32);
-        self.table.set_cols(cc as i32);
-        fltk::app::awake();
+        fun_name(self.model.clone(), self.table.clone());
     }
+
+    pub fn redraw_on(&mut self, timer: &timer::Timer, duration: Duration) {
+        let mutex = self.model.clone();
+        let table = self.table.clone();
+        self.repaint_timer
+            .replace(timer.schedule_repeating(duration, move || {
+                fun_name(mutex.clone(), table.clone());
+            }));
+    }
+}
+
+fn fun_name(mutex: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
+    let (rc, cc) = {
+        let mut simple_model = mutex.lock().unwrap();
+        (simple_model.row_count(), simple_model.column_count())
+    };
+    table.set_rows(rc as i32);
+    table.set_cols(cc as i32);
+    fltk::app::awake();
 }

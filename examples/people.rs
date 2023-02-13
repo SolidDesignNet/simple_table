@@ -1,11 +1,6 @@
 use std::time::Instant;
 
-use fltk::{
-    app,
-    group::{Pack, Scroll},
-    prelude::*,
-    window::Window,
-};
+use fltk::{app, prelude::*, window::Window};
 use simple_table::simple_table::*;
 use timer::Timer;
 
@@ -91,23 +86,20 @@ fn main() {
     // create an app with a scroll with a table of PersonModel
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");
-    let mut pack = Pack::default().with_size(200, 300).center_of(&wind);
-    pack.set_spacing(10);
-    let scroll = Scroll::default_fill();
-    let mut table = SimpleTable::new(Box::new(PersonModel {
-        people,
-        start: Instant::now(),
-    }));
-    scroll.end();
-    pack.end();
+    let mut table = SimpleTable::new(
+        fltk::table::Table::default_fill(),
+        Box::new(PersonModel {
+            people,
+            start: Instant::now(),
+        }),
+    );
+    wind.resizable(&table.table);
     wind.end();
     wind.show();
 
     // repaint the table on a schedule, to demonstrate updating models.
     let timer = Timer::new(); // requires variable, so that it isn't dropped.
-    let _redraw_task = timer.schedule_repeating(chrono::Duration::milliseconds(200), move || {
-        table.redraw();
-    });
+    table.redraw_on(&timer, chrono::Duration::milliseconds(200));
 
     // run the app
     app.run().unwrap();
