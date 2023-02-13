@@ -138,21 +138,26 @@ impl SimpleTable {
         self.font = font;
         self.font_size = size;
     }
+
+    // Mark for redraw immediately.
     pub fn redraw(&mut self) {
-        fun_name(self.model.clone(), self.table.clone());
+        redraw_impl(self.model.clone(), self.table.clone());
     }
 
+    /// Redraw using a timer.  When the table is dropped, the timer task will be dropped.
+    /// The Timer is passed in, so multiple events can share the timer.
     pub fn redraw_on(&mut self, timer: &timer::Timer, duration: Duration) {
         let mutex = self.model.clone();
         let table = self.table.clone();
         self.repaint_timer
             .replace(timer.schedule_repeating(duration, move || {
-                fun_name(mutex.clone(), table.clone());
+                redraw_impl(mutex.clone(), table.clone());
             }));
     }
 }
 
-fn fun_name(mutex: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
+/// Private call that sets up for a redraw of the table.
+fn redraw_impl(mutex: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
     let (rc, cc) = {
         let mut simple_model = mutex.lock().unwrap();
         (simple_model.row_count(), simple_model.column_count())
