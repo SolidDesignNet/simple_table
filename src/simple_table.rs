@@ -10,6 +10,7 @@ use fltk::{
     prelude::{GroupExt, TableExt, WidgetExt},
     table::{Table, TableContext},
 };
+use timer::Guard;
 
 pub trait SimpleModel: Send {
     fn row_count(&mut self) -> usize;
@@ -25,8 +26,6 @@ pub struct SimpleTable {
 
     font: Font,
     font_size: i32,
-
-    repaint_timer: Option<timer::Guard>,
 }
 
 fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
@@ -80,7 +79,6 @@ impl SimpleTable {
             font: enums::Font::Courier,
             font_size: 12,
             model: Arc::new(Mutex::new(model)),
-            repaint_timer: None,
         };
         {
             let model = simple_table.model.clone();
@@ -149,46 +147,35 @@ impl SimpleTable {
     /// Redraw using a timer.  When the table is dropped, the timer task will be dropped.
     /// The Timer is passed in, so multiple events can share the timer.
     pub fn redraw_on(&mut self, timer: &timer::Timer, duration: chrono::Duration) {
-        eprintln!("redraw_on(timer,{:?})", duration);
-        let mutex = self.model.clone();
+        let model = self.model.clone();
         let table = self.table.clone();
-        self.repaint_timer = Some(timer.schedule_repeating(duration, move || {
-            eprintln!("redrawing");
-            redraw_impl(mutex.clone(), table.clone());
-        }));
+        let guard: Arc<Mutex<Option<Guard>>> = Arc::new(Mutex::new(None));
+        guard
+            .clone()
+            .lock()
+            .unwrap()
+            .replace(timer.schedule_repeating(duration, move || {
+                let model = model.clone();
+                let table = table.clone();
+                if table.visible_r() {
+                    // update from fltk thread
+                    fltk::app::awake_callback(move || redraw_impl(model.clone(), table.clone()));
+                } else {
+                    // No longer visible, so stop timer
+                    guard.lock().unwrap().take();
+                }
+            }));
     }
 }
 
 /// Private call that sets up for a redraw of the table.
-fn redraw_impl(mutex: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
+fn redraw_impl(model: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
     let (rc, cc) = {
-        let mut simple_model = mutex.lock().unwrap();
+        let mut simple_model = model.lock().unwrap();
         (simple_model.row_count(), simple_model.column_count())
     };
     table.set_rows(rc as i32);
     table.set_cols(cc as i32);
     table.set_damage(true); // FIXME verify that it's requiredS
     fltk::app::awake();
-}
-
-#[test]
-pub fn test_timer_guard() {
-    let timer = timer::Timer::new();
-    let mut o: Option<timer::Guard> = None;
-    let c = Arc::new(Mutex::new(0));
-    {
-        let c = c.clone();
-        let g = timer.schedule_repeating(chrono::Duration::milliseconds(500), move || {
-            eprintln!("loop {:?}", c.clone());
-            let mut lock = c.lock().unwrap();
-            if *lock < 4 {
-                *lock = *lock + 1;
-            }
-        });
-        o.replace(g);
-    }
-    eprintln!("waiting...{:?}", o.is_some());
-    std::thread::sleep(core::time::Duration::from_secs(3));
-    eprintln!("done waiting...{:?}", o.is_some());
-    assert_eq!(4, *c.lock().unwrap());
 }
