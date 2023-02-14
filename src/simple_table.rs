@@ -1,23 +1,29 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use fltk::{
     draw,
-    enums::{self, Font},
-    prelude::{GroupExt, TableExt, WidgetExt},
+    enums::{self, Event, Font},
+    prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
 use timer::Guard;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Order {
+    Ascending,
+    Descending,
+    None,
+}
 pub trait SimpleModel: Send {
     fn row_count(&mut self) -> usize;
     fn column_count(&mut self) -> usize;
     fn header(&mut self, col: usize) -> String;
     fn column_width(&mut self, col: usize) -> u32;
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
+    fn sort(&mut self, col: usize, order: Order);
 }
 
 pub struct SimpleTable {
@@ -71,14 +77,45 @@ impl SimpleTable {
             }
             table.set_col_resize(true);
         }
+        let model = Arc::new(Mutex::new(model));
+        let m = model.clone();
+        let t = table.clone();
 
-        table.end();
-
+        let mut old_col = -1;
+        let mut order = Order::Ascending;
+        table.handle(move |widget, ev: Event| {
+            match ev {
+                Event::Push => {
+                    if let Some(click) = widget.cursor2rowcol() {
+                        if click.0 == TableContext::ColHeader {
+                            let col = click.2;
+                            eprintln!("sorting {} {:?} old {}", col, order, old_col);
+                            if col != old_col {
+                                order = Order::Ascending;
+                                old_col = col;
+                            } else {
+                                order = match order {
+                                    Order::Ascending => Order::Descending,
+                                    Order::Descending => Order::None,
+                                    Order::None => Order::Ascending,
+                                };
+                            }
+                            m.lock().unwrap().sort(col as usize, order);
+                            t.damage();
+                            return true;
+                        }
+                    }
+                    false
+                }
+                /* other events to be handled */
+                _ => false,
+            }
+        });
         let mut simple_table = SimpleTable {
             table,
             font: enums::Font::Courier,
             font_size: 12,
-            model: Arc::new(Mutex::new(model)),
+            model,
         };
         {
             let model = simple_table.model.clone();
@@ -176,6 +213,6 @@ fn redraw_impl(model: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table)
     };
     table.set_rows(rc as i32);
     table.set_cols(cc as i32);
-    table.set_damage(true); // FIXME verify that it's requiredS
+    // table.set_damage(true); // FIXME verify that it's requiredS
     fltk::app::awake();
 }

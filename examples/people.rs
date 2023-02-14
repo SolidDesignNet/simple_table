@@ -60,6 +60,15 @@ impl SimpleModel for PersonModel {
             }
         }
     }
+
+    fn sort(&mut self, col: usize ) {
+        eprintln!("sort {}", col);
+        self.people.sort_by(|a, b| match col {
+            0 => a.name.cmp(&b.name),
+            1 => a.age.cmp(&b.age),
+            _ => std::cmp::Ordering::Equal,
+        });
+    }
 }
 
 fn main() {
