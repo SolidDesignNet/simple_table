@@ -17,6 +17,21 @@ pub enum Order {
     Descending,
     None,
 }
+impl Order {
+    fn next(&self) -> Order {
+        match self {
+            Order::Ascending => Order::Descending,
+            Order::Descending => Order::None,
+            Order::None => Order::Ascending,
+        }
+    }
+    pub fn apply(&self, o: std::cmp::Ordering) -> std::cmp::Ordering {
+        match self {
+            Order::Descending => o.reverse(),
+            _ => o,
+        }
+    }
+}
 pub trait SimpleModel: Send {
     fn row_count(&mut self) -> usize;
     fn column_count(&mut self) -> usize;
@@ -89,16 +104,11 @@ impl SimpleTable {
                     if let Some(click) = widget.cursor2rowcol() {
                         if click.0 == TableContext::ColHeader {
                             let col = click.2;
-                            eprintln!("sorting {} {:?} old {}", col, order, old_col);
                             if col != old_col {
                                 order = Order::Ascending;
                                 old_col = col;
                             } else {
-                                order = match order {
-                                    Order::Ascending => Order::Descending,
-                                    Order::Descending => Order::None,
-                                    Order::None => Order::Ascending,
-                                };
+                                order = order.next();
                             }
                             m.lock().unwrap().sort(col as usize, order);
                             t.damage();
