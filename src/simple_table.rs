@@ -32,12 +32,20 @@ impl Order {
         }
     }
 }
+
+pub trait DrawDelegate {
+    fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selecte: bool);
+}
+
 pub trait SimpleModel: Send {
     fn row_count(&mut self) -> usize;
     fn column_count(&mut self) -> usize;
     fn header(&mut self, col: usize) -> String;
     fn column_width(&mut self, col: usize) -> u32;
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
+    fn cell_delegate(&mut self, row: i32, col: i32) -> Option<Box<dyn DrawDelegate>> {
+        None
+    }
     fn sort(&mut self, col: usize, order: Order);
 }
 
@@ -150,17 +158,20 @@ impl SimpleTable {
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let value = model.lock().unwrap().cell(row, col).unwrap_or_default();
+                            let value = {
+                                let mut m = model.lock().unwrap();
+                                // if there is a cell delegate, use it
+                                if let Some(d) = m.cell_delegate(row, col) {
+                                    (*d).draw(row, col, x, y, w, h, t.is_selected(row, col));
+                                    return;
+                                }
+                                // otherwise we'll draw the text
+                                m.cell(row, col).unwrap_or_default()
+                            };
                             let str = value.as_str();
                             let calc_height =
                                 draw::height() * (1 + str.matches("\n").count() as i32);
-                            let height = row_heights.get(&row).map(|x| *x);
-                            if height.is_none() || calc_height > height.unwrap() {
-                                //Row height for all cells in row
-                                t.set_row_height(row, calc_height);
-                                t.set_damage(true);
-                                row_heights.insert(row, calc_height);
-                            }
+                            update_min_height(&mut row_heights, row, calc_height, t);
                             draw_data(str, x, y, w, h, t.is_selected(row, col));
                         }
                         TableContext::None => {}
@@ -212,6 +223,21 @@ impl SimpleTable {
                     guard.lock().unwrap().take();
                 }
             }));
+    }
+}
+
+fn update_min_height(
+    row_heights: &mut HashMap<i32, i32>,
+    row: i32,
+    calc_height: i32,
+    t: &mut Table,
+) {
+    let height = row_heights.get(&row).map(|x| *x);
+    if height.is_none() || calc_height > height.unwrap() {
+        //Row height for all cells in row
+        t.set_row_height(row, calc_height);
+        t.set_damage(true);
+        row_heights.insert(row, calc_height);
     }
 }
 
