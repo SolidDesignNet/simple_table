@@ -82,7 +82,7 @@ impl SimpleModel for SignalModel {
     }
 }
 
-struct SparkLine {
+pub struct SparkLine {
     data: Vec<f32>,
 }
 
