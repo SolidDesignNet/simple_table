@@ -263,9 +263,12 @@ impl SparkLine {
 }
 impl DrawDelegate for SparkLine {
     fn draw(&self, row: i32, _col: i32, x: i32, y: i32, w: i32, h: i32, _selected: bool) {
+        draw_rect_fill(x, y, w, h, Color::White);
+        if self.data.len() < 2 {
+            return;
+        }
         let colors = [Color::Red, Color::Blue, Color::Green];
         let color = colors[row as usize % colors.len()];
-        draw_rect_fill(x, y, w, h, Color::White);
         set_draw_color(color);
         let max = self
             .data
