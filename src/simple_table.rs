@@ -4,8 +4,8 @@ use std::{
 };
 
 use fltk::{
-    draw,
-    enums::{self, Event, Font},
+    draw::{self, draw_line, draw_rect_fill, set_draw_color},
+    enums::{self, Color, Event, Font},
     prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
@@ -43,7 +43,7 @@ pub trait SimpleModel: Send {
     fn header(&mut self, col: usize) -> String;
     fn column_width(&mut self, col: usize) -> u32;
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
-    fn cell_delegate(&mut self, row: i32, col: i32) -> Option<Box<dyn DrawDelegate>> {
+    fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
         None
     }
     fn sort(&mut self, col: usize, order: Order);
@@ -251,4 +251,46 @@ fn redraw_impl(model: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table)
     table.set_cols(cc as i32);
     // table.set_damage(true); // FIXME verify that it's requiredS
     fltk::app::awake();
+}
+
+pub struct SparkLine {
+    data: Vec<f32>,
+}
+impl SparkLine {
+    pub fn new(data: Vec<f32>) -> SparkLine {
+        SparkLine { data }
+    }
+}
+impl DrawDelegate for SparkLine {
+    fn draw(&self, row: i32, _col: i32, x: i32, y: i32, w: i32, h: i32, _selected: bool) {
+        let colors = [Color::Red, Color::Blue, Color::Green];
+        let color = colors[row as usize % colors.len()];
+        draw_rect_fill(x, y, w, h, Color::White);
+        set_draw_color(color);
+        let max = self
+            .data
+            .iter()
+            .max_by(|x, y| x.partial_cmp(y).unwrap())
+            .unwrap();
+        let min = self
+            .data
+            .iter()
+            .min_by(|x, y| x.partial_cmp(y).unwrap())
+            .unwrap();
+
+        let y_ratio = h as f32 / (max - min);
+        let x_ratio = w as f32 / self.data.len() as f32;
+
+        let mut dx = x as f32;
+
+        let mut old_x = x as f32;
+        let mut old_y = (h + y) as f32 - ((self.data[0] - min) * y_ratio);
+        for i in &self.data[1..] {
+            let dy = (h + y) as f32 - ((i - min) * y_ratio);
+            draw_line(old_x as i32, old_y as i32, dx as i32, dy as i32);
+            old_x = dx;
+            old_y = dy;
+            dx = dx + x_ratio;
+        }
+    }
 }

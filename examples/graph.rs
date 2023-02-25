@@ -1,16 +1,6 @@
-use std::{
-    ops::Deref,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use chrono::Duration;
-use fltk::{
-    app,
-    draw::{draw_line, draw_point, draw_rect_fill, set_draw_color},
-    enums::Color,
-    prelude::*,
-    window::Window,
-};
+use fltk::{app, prelude::*, window::Window};
 use simple_table::simple_table::*;
 use timer::Timer;
 
@@ -69,54 +59,16 @@ impl SimpleModel for SignalModel {
 
     fn cell_delegate(&mut self, row: i32, col: i32) -> Option<Box<dyn DrawDelegate>> {
         match col {
-            2 => Some(Box::new(SparkLine {
+            2 => Some(Box::new(SparkLine::new(
                 // we can do better TODO
-                data: self.signals.lock().unwrap()[row as usize].values.clone(),
-            })),
+                self.signals.lock().unwrap()[row as usize].values.clone(),
+            ))),
             _ => None,
         }
     }
 
-    fn sort(&mut self, col: usize, order: Order) {
+    fn sort(&mut self, _col: usize, _order: Order) {
         //  todo!()
-    }
-}
-
-pub struct SparkLine {
-    data: Vec<f32>,
-}
-
-impl DrawDelegate for SparkLine {
-    fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selected: bool) {
-        let colors = [Color::Red, Color::Blue, Color::Green];
-        let color = colors[row as usize % colors.len()];
-        draw_rect_fill(x, y, w, h, Color::White);
-        set_draw_color(color);
-        let max = self
-            .data
-            .iter()
-            .max_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap();
-        let min = self
-            .data
-            .iter()
-            .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap();
-
-        let y_ratio = h as f32 / (max - min);
-        let x_ratio = w as f32 / self.data.len() as f32;
-
-        let mut dx = x as f32;
-
-        let mut old_x = x as f32;
-        let mut old_y = (h + y) as f32;
-        for i in &self.data {
-            let dy = (h + y) as f32 - ((i - min) * y_ratio);
-            draw_line(old_x as i32, old_y as i32, dx as i32, dy as i32);
-            old_x = dx;
-            old_y = dy;
-            dx = dx + x_ratio;
-        }
     }
 }
 
@@ -144,7 +96,7 @@ fn main() {
     };
     let mutex = signal_model.signals.clone();
     std::thread::spawn(move || loop {
-        mutex.lock().unwrap().iter_mut().for_each(|mut s| {
+        mutex.lock().unwrap().iter_mut().for_each(|s| {
             let other = s.values.last().unwrap() + (rand::random::<f32>() - 0.5);
             s.values.push(other)
         });
