@@ -72,22 +72,6 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
     draw::pop_clip();
 }
 
-// The selected flag sets the color of the cell to a grayish color, otherwise white
-fn draw_data(txt: &str, x: i32, y: i32, w: i32, h: i32, selected: bool) {
-    draw::push_clip(x, y, w, h);
-    if selected {
-        draw::set_draw_color(enums::Color::from_u32(0x00D3_D3D3));
-    } else {
-        draw::set_draw_color(enums::Color::White);
-    }
-    draw::draw_rectf(x, y, w, h);
-    draw::set_draw_color(enums::Color::Gray0);
-    draw::draw_text2(txt, x, y, w, h, enums::Align::Left);
-    draw::set_draw_color(enums::Color::Light3);
-    draw::draw_rect(x, y, w, h);
-    draw::pop_clip();
-}
-
 impl SimpleTable {
     pub fn new(mut table: Table, mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
         // initialize table
@@ -166,15 +150,34 @@ impl SimpleTable {
                                     m.cell_delegate(row, col),
                                 )
                             };
+                            draw::push_clip(x, y, w, h);
+                            let selected = t.is_selected(row, col);
+                            if selected {
+                                draw::set_draw_color(enums::Color::from_u32(0x00D3_D3D3));
+                            } else {
+                                draw::set_draw_color(enums::Color::White);
+                            }
+                            draw::draw_rectf(x, y, w, h);
                             if dd.is_some() {
                                 (*dd.unwrap()).draw(row, col, x, y, w, h, t.is_selected(row, col));
                             } else {
                                 let str = value.as_str();
                                 let calc_height =
-                                    draw::height() * (1 + str.matches("\n").count() as i32);
+                                    (4 + draw::height()) * (1 + str.matches("\n").count() as i32);
                                 update_min_height(&mut row_heights, row, calc_height, t);
-                                draw_data(str, x, y, w, h, t.is_selected(row, col));
+                                draw::set_draw_color(enums::Color::Gray0);
+                                draw::draw_text2(
+                                    str,
+                                    x + 2,
+                                    y + 2,
+                                    w - 4,
+                                    h - 4,
+                                    enums::Align::Left,
+                                );
                             }
+                            draw::set_draw_color(enums::Color::Light3);
+                            draw::draw_rect(x, y, w, h);
+                            draw::pop_clip();
                         }
                         TableContext::None => {}
                         TableContext::EndPage => {}
@@ -267,7 +270,6 @@ impl SparkLine {
 }
 impl DrawDelegate for SparkLine {
     fn draw(&self, row: i32, _col: i32, x: i32, y: i32, w: i32, h: i32, _selected: bool) {
-        draw_rect_fill(x, y, w, h, Color::White);
         if self.data.len() < 2 {
             return;
         }
