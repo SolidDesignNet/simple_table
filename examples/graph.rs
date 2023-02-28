@@ -7,7 +7,7 @@ use timer::Timer;
 // Example BusinessObject representing a row
 struct Signal {
     name: &'static str,
-    values: Vec<f32>,
+    values: Vec<f64>,
 }
 
 // Example model
@@ -59,10 +59,10 @@ impl SimpleModel for SignalModel {
 
     fn cell_delegate(&mut self, row: i32, col: i32) -> Option<Box<dyn DrawDelegate>> {
         match col {
-            2 => Some(Box::new(SparkLine::new(
-                // we can do better TODO
-                self.signals.lock().unwrap()[row as usize].values.clone(),
-            ))),
+            2 => {
+                let data = self.signals.lock().unwrap()[row as usize].values.clone();
+                Some(Box::new(SparkLine::new(data)))
+            }
             _ => None,
         }
     }
@@ -92,14 +92,28 @@ fn main() {
                 name: "Judy",
                 values: vec![25.0],
             },
+            Signal {
+                name: "zero",
+                values: vec![0.0],
+            },
+            Signal {
+                name: "one",
+                values: vec![1.0],
+            },
         ])),
     };
     let mutex = signal_model.signals.clone();
     std::thread::spawn(move || loop {
-        mutex.lock().unwrap().iter_mut().for_each(|s| {
-            let other = s.values.last().unwrap() + (rand::random::<f32>() - 0.5);
-            s.values.push(other)
-        });
+        {
+            let mut data = mutex.lock().unwrap();
+            let len = &data.len() - 2;
+            data[..len].iter_mut().for_each(|s| {
+                let other = s.values.last().unwrap() + (rand::random::<f64>() - 0.5);
+                s.values.push(other)
+            });
+            data[len].values.push(0.0);
+            data[len + 1].values.push(1.0);
+        }
         std::thread::sleep(std::time::Duration::from_secs(1));
     });
     // create an app with a scroll with a table of PersonModel

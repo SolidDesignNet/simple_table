@@ -4,7 +4,7 @@ use std::{
 };
 
 use fltk::{
-    draw::{self, draw_line, draw_rect_fill, set_draw_color},
+    draw::{self, begin_line, draw_rect_fill, end_line, set_draw_color, vertex},
     enums::{self, Color, Event, Font},
     prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
@@ -158,21 +158,23 @@ impl SimpleTable {
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let value = {
+                            let (value, dd) = {
                                 let mut m = model.lock().unwrap();
-                                // if there is a cell delegate, use it
-                                if let Some(d) = m.cell_delegate(row, col) {
-                                    (*d).draw(row, col, x, y, w, h, t.is_selected(row, col));
-                                    return;
-                                }
                                 // otherwise we'll draw the text
-                                m.cell(row, col).unwrap_or_default()
+                                (
+                                    m.cell(row, col).unwrap_or_default(),
+                                    m.cell_delegate(row, col),
+                                )
                             };
-                            let str = value.as_str();
-                            let calc_height =
-                                draw::height() * (1 + str.matches("\n").count() as i32);
-                            update_min_height(&mut row_heights, row, calc_height, t);
-                            draw_data(str, x, y, w, h, t.is_selected(row, col));
+                            if dd.is_some() {
+                                (*dd.unwrap()).draw(row, col, x, y, w, h, t.is_selected(row, col));
+                            } else {
+                                let str = value.as_str();
+                                let calc_height =
+                                    draw::height() * (1 + str.matches("\n").count() as i32);
+                                update_min_height(&mut row_heights, row, calc_height, t);
+                                draw_data(str, x, y, w, h, t.is_selected(row, col));
+                            }
                         }
                         TableContext::None => {}
                         TableContext::EndPage => {}
@@ -189,7 +191,7 @@ impl SimpleTable {
     }
 
     pub fn reset(&mut self) {
-        TableExt::clear(&mut self.table);
+        self.table.clear();
         self.redraw();
     }
     pub fn set_font(&mut self, font: enums::Font, size: i32) {
@@ -199,25 +201,39 @@ impl SimpleTable {
 
     // Mark for redraw immediately.
     pub fn redraw(&mut self) {
-        redraw_impl(self.model.clone(), self.table.clone());
+        let (rc, cc) = {
+            let mut simple_model = self.model.lock().unwrap();
+            (simple_model.row_count(), simple_model.column_count())
+        };
+        self.table.set_rows(rc as i32);
+        self.table.set_cols(cc as i32);
+        // table.set_damage(true); // FIXME verify that it's requiredS
+        fltk::app::awake();
     }
 
     /// Redraw using a timer.  When the table is dropped, the timer task will be dropped.
     /// The Timer is passed in, so multiple events can share the timer.
     pub fn redraw_on(&mut self, timer: &timer::Timer, duration: chrono::Duration) {
         let model = self.model.clone();
-        let table = self.table.clone();
+        let table = Arc::new(Mutex::new(self.table.clone()));
         let guard: Arc<Mutex<Option<Guard>>> = Arc::new(Mutex::new(None));
         guard
             .clone()
             .lock()
             .unwrap()
             .replace(timer.schedule_repeating(duration, move || {
-                let model = model.clone();
-                let table = table.clone();
+                let mut table = table.lock().unwrap();
                 if table.visible_r() {
-                    // update from fltk thread
-                    fltk::app::awake_callback(move || redraw_impl(model.clone(), table.clone()));
+                    {
+                        let (rc, cc) = {
+                            let mut simple_model = model.lock().unwrap();
+                            (simple_model.row_count(), simple_model.column_count())
+                        };
+                        table.set_rows(rc as i32);
+                        table.set_cols(cc as i32);
+                        // table.set_damage(true); // FIXME verify that it's requiredS
+                        fltk::app::awake();
+                    };
                 } else {
                     // No longer visible, so stop timer
                     guard.lock().unwrap().take();
@@ -241,23 +257,11 @@ fn update_min_height(
     }
 }
 
-/// Private call that sets up for a redraw of the table.
-fn redraw_impl(model: Arc<Mutex<Box<dyn SimpleModel + Send>>>, mut table: Table) {
-    let (rc, cc) = {
-        let mut simple_model = model.lock().unwrap();
-        (simple_model.row_count(), simple_model.column_count())
-    };
-    table.set_rows(rc as i32);
-    table.set_cols(cc as i32);
-    // table.set_damage(true); // FIXME verify that it's requiredS
-    fltk::app::awake();
-}
-
 pub struct SparkLine {
-    data: Vec<f32>,
+    pub data: Vec<f64>,
 }
 impl SparkLine {
-    pub fn new(data: Vec<f32>) -> SparkLine {
+    pub fn new(data: Vec<f64>) -> SparkLine {
         SparkLine { data }
     }
 }
@@ -270,30 +274,32 @@ impl DrawDelegate for SparkLine {
         let colors = [Color::Red, Color::Blue, Color::Green];
         let color = colors[row as usize % colors.len()];
         set_draw_color(color);
-        let max = self
+        let mut max = *self
             .data
             .iter()
             .max_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap();
-        let min = self
+            .unwrap() as f64;
+        let mut min = *self
             .data
             .iter()
             .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap();
-
-        let y_ratio = h as f32 / (max - min);
-        let x_ratio = w as f32 / self.data.len() as f32;
-
-        let mut dx = x as f32;
-
-        let mut old_x = x as f32;
-        let mut old_y = (h + y) as f32 - ((self.data[0] - min) * y_ratio);
-        for i in &self.data[1..] {
-            let dy = (h + y) as f32 - ((i - min) * y_ratio);
-            draw_line(old_x as i32, old_y as i32, dx as i32, dy as i32);
-            old_x = dx;
-            old_y = dy;
-            dx = dx + x_ratio;
+            .unwrap() as f64;
+        if max == min {
+            max = max + 1.0;
+            min = min - 1.0;
         }
+
+        let y_ratio = h as f64 / (max - min);
+        let x_ratio = w as f64 / self.data.len() as f64;
+
+        let mut x = x as f64;
+        let top = (h + y) as f64;
+
+        begin_line();
+        for i in &self.data {
+            vertex(x, top - ((*i - min) * y_ratio));
+            x = x + x_ratio;
+        }
+        end_line();
     }
 }
