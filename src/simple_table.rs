@@ -4,7 +4,7 @@ use std::{
 };
 
 use fltk::{
-    draw::{self, begin_line, draw_rect_fill, end_line, set_draw_color, vertex},
+    draw::{self, begin_line, end_line, set_draw_color, vertex},
     enums::{self, Color, Event, Font},
     prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
@@ -49,9 +49,12 @@ pub trait SimpleModel: Send {
     fn sort(&mut self, col: usize, order: Order);
 }
 
-pub struct SimpleTable {
+pub struct SimpleTable<T>
+where
+    T: SimpleModel + Send,
+{
     pub table: Table,
-    pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
+    pub model: Arc<Mutex<Box<T>>>,
 
     font: Font,
     font_size: i32,
@@ -72,8 +75,11 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
     draw::pop_clip();
 }
 
-impl SimpleTable {
-    pub fn new(mut table: Table, mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
+impl<T> SimpleTable<T>
+where
+    T: SimpleModel + Send+'static,
+{
+    pub fn new(mut table: Table, mut model: Box<T>) -> SimpleTable<T> {
         // initialize table
         //let mut table = Table::default();
         {
