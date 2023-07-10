@@ -56,9 +56,12 @@ pub trait SimpleModel: Send {
     fn sort(&mut self, _col: usize, _order: Order) {}
 }
 
-pub struct SimpleTable {
+pub struct SimpleTable<T>
+where
+    T: SimpleModel + Send,
+{
     pub table: Table,
-    pub model: Arc<Mutex<Box<dyn SimpleModel + Send>>>,
+    pub model: Arc<Mutex<Box<T>>>,
 
     font: Font,
     font_size: i32,
@@ -80,8 +83,11 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
 }
 static mut TOOLTIP_BUFFER: [u8; 256] = [0; 256];
 
-impl SimpleTable {
-    pub fn new(mut table: Table, mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
+impl<T> SimpleTable<T>
+where
+    T: SimpleModel + Send+'static,
+{
+    pub fn new(mut table: Table, mut model: Box<T>) -> SimpleTable<T> {
         // initialize table
         {
             table.set_cols(model.column_count() as i32);
