@@ -1,11 +1,13 @@
 use std::{
     collections::HashMap,
+    ffi::CStr,
     sync::{Arc, Mutex},
 };
 
 use fltk::{
-    draw::{self, begin_line, draw_rect_fill, end_line, set_draw_color, vertex},
+    draw::{self, begin_line, end_line, set_draw_color, vertex},
     enums::{self, Color, Event, Font},
+    misc::Tooltip,
     prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
@@ -42,11 +44,16 @@ pub trait SimpleModel: Send {
     fn column_count(&mut self) -> usize;
     fn header(&mut self, col: usize) -> String;
     fn column_width(&mut self, col: usize) -> u32;
+    // if cell returns None, then cell_delegate is called
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
     fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
         None
     }
-    fn sort(&mut self, col: usize, order: Order);
+    fn hover(&self, row: i32, col: i32) -> Option<String> {
+        //None
+        Some(format!("hover {} {}", row, col))
+    }
+    fn sort(&mut self, _col: usize, _order: Order) {}
 }
 
 pub struct SimpleTable {
@@ -71,11 +78,11 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
     draw::draw_text2(txt, x, y, w, h, enums::Align::Center);
     draw::pop_clip();
 }
+static mut TOOLTIP_BUFFER: [u8; 256] = [0; 256];
 
 impl SimpleTable {
     pub fn new(mut table: Table, mut model: Box<dyn SimpleModel + Send>) -> SimpleTable {
         // initialize table
-        //let mut table = Table::default();
         {
             table.set_cols(model.column_count() as i32);
             table.set_col_header(true);
@@ -86,25 +93,51 @@ impl SimpleTable {
         }
         let model = Arc::new(Mutex::new(model));
         let m = model.clone();
-        let t = table.clone();
 
-        let mut old_col = -1;
-        let mut order = Order::Ascending;
-        table.handle(move |widget, ev: Event| {
+        let mut old_sort_col = -1;
+        let mut sort_order = Order::Ascending;
+        let mut tooltip_cell = (-1, -1);
+
+        table.handle(move |t, ev: Event| {
             match ev {
                 Event::Push => {
-                    if let Some(click) = widget.cursor2rowcol() {
-                        if click.0 == TableContext::ColHeader {
-                            let col = click.2;
-                            if col != old_col {
-                                order = Order::Ascending;
-                                old_col = col;
-                            } else {
-                                order = order.next();
-                            }
-                            m.lock().unwrap().sort(col as usize, order);
-                            t.damage();
-                            return true;
+                    // handle sorting
+                    if let Some((TableContext::ColHeader, _row, col, _)) = t.cursor2rowcol() {
+                        if col != old_sort_col {
+                            sort_order = Order::Ascending;
+                            old_sort_col = col;
+                        } else {
+                            sort_order = sort_order.next();
+                        }
+                        m.lock().unwrap().sort(col as usize, sort_order);
+                        t.damage();
+                        true
+                    } else {
+                        false
+                    }
+                }
+                Event::Move => {
+                    // handle dynamic tooltip
+                    // fltk hover support sucks.  Take a look at https://github.com/fltk-rs/fltk-rs/discussions/942#discussioncomment-1881750 to replace with a better popup
+                    if let Some((TableContext::Cell, row, col, _)) = t.cursor2rowcol() {
+                        if (row, col) != tooltip_cell {
+                            tooltip_cell = (row, col);
+
+                            let hover = m.lock().unwrap().hover(row, col);
+                            hover.map(|my_string| {
+                                Tooltip::enable(true);
+                                // Copy char* into global.  FLTK hover uses a static CStr.
+                                unsafe {
+                                    TOOLTIP_BUFFER
+                                        .as_mut_ptr()
+                                        .copy_from(my_string.as_ptr(), my_string.len() + 1)
+                                };
+
+                                let static_tip = unsafe {
+                                    CStr::from_bytes_until_nul(TOOLTIP_BUFFER.as_ref()).unwrap()
+                                };
+                                Tooltip::enter_area(t, 0, 0, 80, 80, static_tip);
+                            });
                         }
                     }
                     false

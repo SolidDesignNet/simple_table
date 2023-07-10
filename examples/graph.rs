@@ -67,9 +67,17 @@ impl SimpleModel for SignalModel {
         }
     }
 
-    fn sort(&mut self, _col: usize, _order: Order) {
-        //  todo!()
+    fn hover(&self, row: i32, col: i32) -> Option<String> {
+        let lock = self.signals.lock();
+        let v = &lock.unwrap()[row as usize];
+        Some(if col == 0 {
+            format!("The name is {}", v.name)
+        } else {
+            format!("Desc: {}", v.name)
+        })
     }
+
+    fn sort(&mut self, _col: usize, _order: Order) {}
 }
 
 fn main() {
