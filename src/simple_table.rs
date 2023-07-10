@@ -50,8 +50,7 @@ pub trait SimpleModel: Send {
         None
     }
     fn hover(&self, row: i32, col: i32) -> Option<String> {
-        //None
-        Some(format!("hover {} {}", row, col))
+        None
     }
     fn sort(&mut self, _col: usize, _order: Order) {}
 }
