@@ -49,7 +49,7 @@ pub trait SimpleModel: Send {
     fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
         None
     }
-    fn hover(&self, row: i32, col: i32) -> Option<String> {
+    fn hover(&self, _row: i32, _col: i32) -> Option<String> {
         None
     }
     fn sort(&mut self, _col: usize, _order: Order) {}
@@ -84,7 +84,7 @@ static mut TOOLTIP_BUFFER: [u8; 256] = [0; 256];
 
 impl<T> SimpleTable<T>
 where
-    T: SimpleModel + Send+'static,
+    T: SimpleModel + Send + 'static,
 {
     pub fn new(mut table: Table, mut model: Box<T>) -> SimpleTable<T> {
         // initialize table
@@ -280,6 +280,20 @@ where
                     guard.lock().unwrap().take();
                 }
             }));
+    }
+    pub fn copy(&self,col_delimiter:&str,row_delimier:&str) -> String {
+        let model = &mut self.model.lock().unwrap();
+        let mut str = String::new();
+        for row in 0..(model.row_count() as i32) {
+            for col in 0..(model.column_count() as i32) {
+                if let Some(c) = model.cell(row, col) {
+                    str.push_str(&c);
+                }
+                str.push_str(col_delimiter);
+            }
+            str.push_str(row_delimier);
+        }
+        str
     }
 }
 
