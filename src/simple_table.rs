@@ -97,60 +97,60 @@ where
             table.set_col_resize(true);
         }
         let model = Arc::new(Mutex::new(model));
-        let m = model.clone();
-
-        let mut old_sort_col = -1;
-        let mut sort_order = Order::Ascending;
-        let mut tooltip_cell = (-1, -1);
-
-        table.handle(move |t, ev: Event| {
-            match ev {
-                Event::Push => {
-                    // handle sorting
-                    if let Some((TableContext::ColHeader, _row, col, _)) = t.cursor2rowcol() {
-                        if col != old_sort_col {
-                            sort_order = Order::Ascending;
-                            old_sort_col = col;
+        {
+            let model = model.clone();
+            let mut old_sort_col = -1;
+            let mut sort_order = Order::Ascending;
+            let mut tooltip_cell = (-1, -1);
+            table.handle(move |t, ev: Event| {
+                match ev {
+                    Event::Push => {
+                        // handle sorting
+                        if let Some((TableContext::ColHeader, _row, col, _)) = t.cursor2rowcol() {
+                            if col != old_sort_col {
+                                sort_order = Order::Ascending;
+                                old_sort_col = col;
+                            } else {
+                                sort_order = sort_order.next();
+                            }
+                            model.lock().unwrap().sort(col as usize, sort_order);
+                            t.damage();
+                            true
                         } else {
-                            sort_order = sort_order.next();
+                            false
                         }
-                        m.lock().unwrap().sort(col as usize, sort_order);
-                        t.damage();
-                        true
-                    } else {
+                    }
+                    Event::Move => {
+                        // handle dynamic tooltip
+                        // fltk hover support sucks.  Take a look at https://github.com/fltk-rs/fltk-rs/discussions/942#discussioncomment-1881750 to replace with a better popup
+                        if let Some((TableContext::Cell, row, col, _)) = t.cursor2rowcol() {
+                            if (row, col) != tooltip_cell {
+                                tooltip_cell = (row, col);
+
+                                let hover = model.lock().unwrap().hover(row, col);
+                                hover.map(|my_string| {
+                                    Tooltip::enable(true);
+                                    // Copy char* into global.  FLTK hover uses a static CStr.
+                                    unsafe {
+                                        TOOLTIP_BUFFER
+                                            .as_mut_ptr()
+                                            .copy_from(my_string.as_ptr(), my_string.len() + 1)
+                                    };
+
+                                    let static_tip = unsafe {
+                                        CStr::from_bytes_until_nul(TOOLTIP_BUFFER.as_ref()).unwrap()
+                                    };
+                                    Tooltip::enter_area(t, 0, 0, 80, 80, static_tip);
+                                });
+                            }
+                        }
                         false
                     }
+                    /* other events to be handled */
+                    _ => false,
                 }
-                Event::Move => {
-                    // handle dynamic tooltip
-                    // fltk hover support sucks.  Take a look at https://github.com/fltk-rs/fltk-rs/discussions/942#discussioncomment-1881750 to replace with a better popup
-                    if let Some((TableContext::Cell, row, col, _)) = t.cursor2rowcol() {
-                        if (row, col) != tooltip_cell {
-                            tooltip_cell = (row, col);
-
-                            let hover = m.lock().unwrap().hover(row, col);
-                            hover.map(|my_string| {
-                                Tooltip::enable(true);
-                                // Copy char* into global.  FLTK hover uses a static CStr.
-                                unsafe {
-                                    TOOLTIP_BUFFER
-                                        .as_mut_ptr()
-                                        .copy_from(my_string.as_ptr(), my_string.len() + 1)
-                                };
-
-                                let static_tip = unsafe {
-                                    CStr::from_bytes_until_nul(TOOLTIP_BUFFER.as_ref()).unwrap()
-                                };
-                                Tooltip::enter_area(t, 0, 0, 80, 80, static_tip);
-                            });
-                        }
-                    }
-                    false
-                }
-                /* other events to be handled */
-                _ => false,
-            }
-        });
+            });
+        }
         let mut simple_table = SimpleTable {
             table,
             font: enums::Font::Courier,
@@ -196,22 +196,25 @@ where
                                 draw::set_draw_color(enums::Color::White);
                             }
                             draw::draw_rectf(x, y, w, h);
-                            if dd.is_some() {
-                                (*dd.unwrap()).draw(row, col, x, y, w, h, t.is_selected(row, col));
-                            } else {
-                                let str = value.as_str();
-                                let calc_height =
-                                    (4 + draw::height()) * (1 + str.matches("\n").count() as i32);
-                                update_min_height(&mut row_heights, row, calc_height, t);
-                                draw::set_draw_color(enums::Color::Gray0);
-                                draw::draw_text2(
-                                    str,
-                                    x + 2,
-                                    y + 2,
-                                    w - 4,
-                                    h - 4,
-                                    enums::Align::Left,
-                                );
+                            match dd {
+                                Some(u) => {
+                                    u.draw(row, col, x, y, w, h, t.is_selected(row, col));
+                                }
+                                None => {
+                                    let str = value.as_str();
+                                    let calc_height = (4 + draw::height())
+                                        * (1 + str.matches("\n").count() as i32);
+                                    update_min_height(&mut row_heights, row, calc_height, t);
+                                    draw::set_draw_color(enums::Color::Gray0);
+                                    draw::draw_text2(
+                                        str,
+                                        x + 2,
+                                        y + 2,
+                                        w - 4,
+                                        h - 4,
+                                        enums::Align::Left,
+                                    );
+                                }
                             }
                             draw::set_draw_color(enums::Color::Light3);
                             draw::draw_rect(x, y, w, h);
@@ -281,7 +284,7 @@ where
                 }
             }));
     }
-    pub fn copy(&self,col_delimiter:&str,row_delimier:&str) -> String {
+    pub fn copy(&self, col_delimiter: &str, row_delimier: &str) -> String {
         let model = &mut self.model.lock().unwrap();
         let mut str = String::new();
         for row in 0..(model.row_count() as i32) {
@@ -328,16 +331,18 @@ impl DrawDelegate for SparkLine {
         let colors = [Color::Red, Color::Blue, Color::Green];
         let color = colors[row as usize % colors.len()];
         set_draw_color(color);
-        let mut max = *self
+        let mut max = self
             .data
             .iter()
-            .max_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap() as f64;
-        let mut min = *self
+            .max_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|f| *f)
+            .unwrap_or(0.0);
+        let mut min = self
             .data
             .iter()
-            .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap() as f64;
+            .min_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|f| *f)
+            .unwrap_or(0.0);
         if max == min {
             max = max + 1.0;
             min = min - 1.0;
