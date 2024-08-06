@@ -127,7 +127,7 @@ fn main() {
     // create an app with a scroll with a table of PersonModel
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");
-    let mut table = SimpleTable::new(fltk::table::Table::default_fill(), Box::new(signal_model));
+    let mut table = SimpleTable::new(fltk::table::Table::default_fill(), signal_model);
     wind.resizable(&table.table);
     wind.end();
     wind.show();

@@ -60,7 +60,7 @@ where
     T: SimpleModel + Send,
 {
     pub table: Table,
-    pub model: Arc<Mutex<Box<T>>>,
+    pub model: Arc<Mutex<T>>,
 
     font: Font,
     font_size: i32,
@@ -86,7 +86,7 @@ impl<T> SimpleTable<T>
 where
     T: SimpleModel + Send + 'static,
 {
-    pub fn new(mut table: Table, mut model: Box<T>) -> SimpleTable<T> {
+    pub fn new(mut table: Table, mut model: T) -> SimpleTable<T> {
         // initialize table
         {
             table.set_cols(model.column_count() as i32);

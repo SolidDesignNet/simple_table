@@ -98,10 +98,10 @@ fn main() {
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");
     let mut table = SimpleTable::new(
         fltk::table::Table::default_fill(),
-        Box::new(PersonModel {
+        PersonModel {
             people,
             start: Instant::now(),
-        }),
+        },
     );
     wind.resizable(&table.table);
     wind.end();
