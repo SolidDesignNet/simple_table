@@ -13,6 +13,7 @@ use fltk::{
 };
 use timer::Guard;
 
+// Sort order
 #[derive(Debug, Clone, Copy)]
 pub enum Order {
     Ascending,
@@ -35,26 +36,37 @@ impl Order {
     }
 }
 
+/// Custom renderer
 pub trait DrawDelegate {
     fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selecte: bool);
 }
 
+/// Table model trait. Implementations of this trait will describe how to display a table.
 pub trait SimpleModel: Send {
+    /// How many rows in the table?
     fn row_count(&mut self) -> usize;
+    /// How many columns in the table?
     fn column_count(&mut self) -> usize;
+    /// Table header (column titles)
     fn header(&mut self, col: usize) -> String;
+    /// default column widths.  They are resizable by the user, but default to this size.
     fn column_width(&mut self, col: usize) -> u32;
-    // if cell returns None, then cell_delegate is called
+
+    /// if cell returns None, then cell_delegate is called
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
+    /// Custom renderer.
     fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
         None
     }
+    /// Popup help.
     fn hover(&self, _row: i32, _col: i32) -> Option<String> {
         None
     }
+    /// Optional sorting. Activated by clicking on a header.
     fn sort(&mut self, _col: usize, _order: Order) {}
 }
 
+/// Define a FLTK table with a data model
 pub struct SimpleTable<T>
 where
     T: SimpleModel + Send,
@@ -180,7 +192,7 @@ where
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let (value, dd) = {
+                            let (value, draw_delegate) = {
                                 let mut m = model.lock().unwrap();
                                 // otherwise we'll draw the text
                                 (
@@ -190,15 +202,16 @@ where
                             };
                             draw::push_clip(x, y, w, h);
                             let selected = t.is_selected(row, col);
+                            // FIXME use L&F
                             if selected {
                                 draw::set_draw_color(enums::Color::from_u32(0x00D3_D3D3));
                             } else {
                                 draw::set_draw_color(enums::Color::White);
                             }
                             draw::draw_rectf(x, y, w, h);
-                            match dd {
-                                Some(u) => {
-                                    u.draw(row, col, x, y, w, h, t.is_selected(row, col));
+                            match draw_delegate {
+                                Some(dd) => {
+                                    dd.draw(row, col, x, y, w, h, t.is_selected(row, col));
                                 }
                                 None => {
                                     let str = value.as_str();
@@ -245,13 +258,13 @@ where
 
     // Mark for redraw immediately.
     pub fn redraw(&mut self) {
-        let (rc, cc) = {
+        let (row_count, col_count) = {
             let mut simple_model = self.model.lock().unwrap();
             (simple_model.row_count(), simple_model.column_count())
         };
-        self.table.set_rows(rc as i32);
-        self.table.set_cols(cc as i32);
-        // table.set_damage(true); // FIXME verify that it's requiredS
+        self.table.set_rows(row_count as i32);
+        self.table.set_cols(col_count as i32);
+        // table.set_damage(true); // FIXME verify that it's required
         fltk::app::awake();
     }
 
@@ -268,6 +281,8 @@ where
             .replace(timer.schedule_repeating(duration, move || {
                 let mut table = table.lock().unwrap();
                 if table.visible_r() {
+                    // FIXME why can't this call be made?
+                    //self.redraw();
                     {
                         let (rc, cc) = {
                             let mut simple_model = model.lock().unwrap();
@@ -284,6 +299,7 @@ where
                 }
             }));
     }
+
     pub fn copy(&self, col_delimiter: &str, row_delimier: &str) -> String {
         let model = &mut self.model.lock().unwrap();
         let mut str = String::new();
@@ -304,13 +320,13 @@ fn update_min_height(
     row_heights: &mut HashMap<i32, i32>,
     row: i32,
     calc_height: i32,
-    t: &mut Table,
+    table: &mut Table,
 ) {
     let height = row_heights.get(&row).map(|x| *x);
     if height.is_none() || calc_height > height.unwrap() {
         //Row height for all cells in row
-        t.set_row_height(row, calc_height);
-        t.set_damage(true);
+        table.set_row_height(row, calc_height);
+        table.set_damage(true);
         row_heights.insert(row, calc_height);
     }
 }

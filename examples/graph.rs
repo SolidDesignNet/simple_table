@@ -80,6 +80,7 @@ impl SimpleModel for SignalModel {
     fn sort(&mut self, _col: usize, _order: Order) {}
 }
 
+/// demonstration of table with Spark Line.
 fn main() {
     // data that would normally come from a DB or other source
     let signal_model = SignalModel {
@@ -110,6 +111,7 @@ fn main() {
             },
         ])),
     };
+    // man data dynamic, for a more interesting graph.
     let mutex = signal_model.signals.clone();
     std::thread::spawn(move || loop {
         {
@@ -124,6 +126,7 @@ fn main() {
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     });
+    
     // create an app with a scroll with a table of PersonModel
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");

@@ -4,19 +4,20 @@ use fltk::{app, prelude::*, window::Window};
 use simple_table::simple_table::*;
 use timer::Timer;
 
-// Example BusinessObject representing a row
+/// Example BusinessObject representing a row
 struct Person {
     name: &'static str,
     age: u32,
 }
 
-// Example model
+/// Example model
 struct PersonModel {
     people: Vec<Person>,
     start: Instant,
 }
 
-// Example model implementation
+/// Example model implementation
+/// Just displays some names, then numbers.  Demonstrates a multiline cell, dynamically added cells, and sorting.
 impl SimpleModel for PersonModel {
     fn row_count(&mut self) -> usize {
         //self.people.len()
