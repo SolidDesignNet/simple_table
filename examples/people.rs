@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use fltk::{app, prelude::*, window::Window};
+use fltk_theme::{SchemeType, WidgetScheme};
 use simple_table::simple_table::*;
 use timer::Timer;
 
@@ -65,7 +66,7 @@ impl SimpleModel for PersonModel {
     fn sort(&mut self, col: usize, order: Order) {
         self.people.sort_by(|a, b| {
             order.apply(match col {
-                0 => a.name.cmp(&b.name),
+                0 => a.name.cmp(b.name),
                 1 => a.age.cmp(&b.age),
                 _ => std::cmp::Ordering::Equal,
             })
@@ -74,6 +75,7 @@ impl SimpleModel for PersonModel {
 }
 
 fn main() {
+    WidgetScheme::new(SchemeType::SvgBased).apply();
     // data that would normally come from a DB or other source
     let people = vec![
         Person {

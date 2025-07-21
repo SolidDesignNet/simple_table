@@ -1,13 +1,15 @@
+#[cfg(feature = "hover")]
+use std::ffi::CStr;
 use std::{
     collections::HashMap,
-    ffi::CStr,
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "hover")]
+use fltk::misc::Tooltip;
 use fltk::{
     draw::{self, begin_line, end_line, set_draw_color, vertex},
     enums::{self, Color, Event, Font},
-    misc::Tooltip,
     prelude::{TableExt, WidgetBase, WidgetExt},
     table::{Table, TableContext},
 };
@@ -38,7 +40,7 @@ impl Order {
 
 /// Custom renderer
 pub trait DrawDelegate {
-    fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selecte: bool);
+    fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selected: bool);
 }
 
 /// Table model trait. Implementations of this trait will describe how to display a table.
@@ -92,6 +94,7 @@ fn draw_header(txt: &str, x: i32, y: i32, w: i32, h: i32) {
     draw::draw_text2(txt, x, y, w, h, enums::Align::Center);
     draw::pop_clip();
 }
+#[cfg(feature = "hover")]
 static mut TOOLTIP_BUFFER: [u8; 256] = [0; 256];
 
 impl<T> SimpleTable<T>
@@ -113,7 +116,8 @@ where
             let model = model.clone();
             let mut old_sort_col = -1;
             let mut sort_order = Order::Ascending;
-            let mut tooltip_cell = (-1, -1);
+            #[cfg(feature = "hover")]
+            let tooltip_cell = (-1, -1);
             table.handle(move |t, ev: Event| {
                 match ev {
                     Event::Push => {
@@ -132,6 +136,7 @@ where
                             false
                         }
                     }
+                    #[cfg(feature = "hover")]
                     Event::Move => {
                         // handle dynamic tooltip
                         // fltk hover support sucks.  Take a look at https://github.com/fltk-rs/fltk-rs/discussions/942#discussioncomment-1881750 to replace with a better popup
@@ -140,7 +145,7 @@ where
                                 tooltip_cell = (row, col);
 
                                 let hover = model.lock().unwrap().hover(row, col);
-                                hover.map(|my_string| {
+                                if let Some(my_string) = hover {
                                     Tooltip::enable(true);
                                     // Copy char* into global.  FLTK hover uses a static CStr.
                                     unsafe {
@@ -153,7 +158,7 @@ where
                                         CStr::from_bytes_until_nul(TOOLTIP_BUFFER.as_ref()).unwrap()
                                     };
                                     Tooltip::enter_area(t, 0, 0, 80, 80, static_tip);
-                                });
+                                };
                             }
                         }
                         false
@@ -322,7 +327,7 @@ fn update_min_height(
     calc_height: i32,
     table: &mut Table,
 ) {
-    let height = row_heights.get(&row).map(|x| *x);
+    let height = row_heights.get(&row).copied();
     if height.is_none() || calc_height > height.unwrap() {
         //Row height for all cells in row
         table.set_row_height(row, calc_height);
@@ -351,17 +356,17 @@ impl DrawDelegate for SparkLine {
             .data
             .iter()
             .max_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|f| *f)
+            .copied()
             .unwrap_or(0.0);
         let mut min = self
             .data
             .iter()
             .min_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|f| *f)
+            .copied()
             .unwrap_or(0.0);
         if max == min {
-            max = max + 1.0;
-            min = min - 1.0;
+            max += 1.0;
+            min -= 1.0;
         }
 
         let y_ratio = h as f64 / (max - min);
@@ -373,7 +378,7 @@ impl DrawDelegate for SparkLine {
         begin_line();
         for i in &self.data {
             vertex(x, top - ((*i - min) * y_ratio));
-            x = x + x_ratio;
+            x += x_ratio;
         }
         end_line();
     }
