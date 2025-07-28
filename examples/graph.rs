@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use fltk::{app, prelude::*, window::Window};
-use simple_table::simple_table::*;
+use simple_table::{simple_model::{DrawDelegate, Order, SimpleModel}, simple_table::*};
 use timer::Timer;
 
 // Example BusinessObject representing a row

@@ -1,8 +1,12 @@
-use std::time::Instant;
+use std::
+    time::Instant
+;
 
-use fltk::{app, prelude::*, window::Window};
+use fltk::{
+    app::{self}, prelude::{GroupExt, WidgetExt}, window::Window
+};
 use fltk_theme::{SchemeType, WidgetScheme};
-use simple_table::{simple_model::{Order, SimpleModel}, simple_table::*};
+use simple_table::{joe_table::JoeTable, simple_model::{Order, SimpleModel}};
 use timer::Timer;
 
 /// Example BusinessObject representing a row
@@ -20,6 +24,9 @@ struct PersonModel {
 /// Example model implementation
 /// Just displays some names, then numbers.  Demonstrates a multiline cell, dynamically added cells, and sorting.
 impl SimpleModel for PersonModel {
+    fn all_row_height(&mut self) -> Option<u32> {
+        Some(40)
+    }
     fn row_count(&mut self) -> usize {
         //self.people.len()
         // demonstration of dynamic size
@@ -99,14 +106,14 @@ fn main() {
     // create an app with a scroll with a table of PersonModel
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");
-    let mut table = SimpleTable::new(
-        fltk::table::Table::default_fill(),
-        PersonModel {
-            people,
-            start: Instant::now(),
-        },
-    );
-    wind.resizable(&table.table);
+    let table = JoeTable::new(PersonModel {
+        people,
+        start: Instant::now(),
+    });
+    // FIXME why doesn't this work?
+    //    let w = &*table;
+    //    wind.resizable(w);
+    wind.resizable(&table.scroll);
     wind.end();
     wind.show();
 
