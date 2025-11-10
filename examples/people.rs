@@ -40,7 +40,7 @@ impl SimpleModel for PersonModel {
 
     fn column_width(&mut self, col: usize) -> u32 {
         match col {
-            0 => 120,
+            0 => 240,
             _ => 60,
         }
     }

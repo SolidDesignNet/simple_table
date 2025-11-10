@@ -1,12 +1,15 @@
-use std::
-    time::Instant
-;
+use std::time::Instant;
 
 use fltk::{
-    app::{self}, prelude::{GroupExt, WidgetExt}, window::Window
+    app::{self},
+    prelude::{GroupExt, WidgetExt},
+    window::Window,
 };
 use fltk_theme::{SchemeType, WidgetScheme};
-use simple_table::{joe_table::JoeTable, simple_model::{Order, SimpleModel}};
+use simple_table::{
+    joe_table::JoeTable,
+    simple_model::{Order, SimpleModel},
+};
 use timer::Timer;
 
 /// Example BusinessObject representing a row
@@ -47,7 +50,7 @@ impl SimpleModel for PersonModel {
 
     fn column_width(&mut self, col: usize) -> u32 {
         match col {
-            0 => 120,
+            0 => 240,
             _ => 60,
         }
     }
@@ -110,10 +113,7 @@ fn main() {
         people,
         start: Instant::now(),
     });
-    // FIXME why doesn't this work?
-    //    let w = &*table;
-    //    wind.resizable(w);
-    wind.resizable(&table.scroll);
+    wind.resizable(&table.as_base_widget());
     wind.end();
     wind.show();
 

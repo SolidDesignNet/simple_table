@@ -1,3 +1,5 @@
+use fltk::widget::Widget;
+
 // Sort order
 #[derive(Debug, Clone, Copy)]
 pub enum Order {
@@ -27,7 +29,7 @@ pub trait DrawDelegate {
 
 /// Table model trait. Implementations of this trait will describe how to display a table.
 // FIXME use i32 or u32 consistently!
-pub trait SimpleModel: Send {
+pub trait SimpleModel {
     /// How many rows in the table?
     fn row_count(&mut self) -> usize;
     /// How many columns in the table?
@@ -48,6 +50,9 @@ pub trait SimpleModel: Send {
     fn cell(&mut self, row: i32, col: i32) -> Option<String>;
     /// Custom renderer.
     fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
+        None
+    }
+    fn cell_widget(&mut self, _row: i32, _col: i32) -> Option<Widget> {
         None
     }
     /// Popup help.
