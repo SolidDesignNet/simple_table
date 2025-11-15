@@ -2,6 +2,8 @@
 name = "simple_table"
 version = "0.3.0"
 edition = "2021"
+license = "MIT"
+description = "Model driven FTLK table support."
 
 [dependencies]
 fltk = {version="1.5.21"}#,features = ["fltk-bundled"]}
