@@ -1,50 +1,58 @@
 use std::{
     cmp::Ordering,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Range},
     sync::{Arc, Mutex},
-    time::Instant,
-    usize,
 };
 
 use fltk::{
-    app::{self, sleep},
-    draw::{draw_frame, draw_rect_fill, draw_text2, pop_clip, push_clip, set_draw_color},
-    enums::{Align, Color, Event},
+    app::{self, set_font},
+    draw::{
+        self, draw_frame, draw_rect_fill, draw_text2, font, pop_clip, push_clip, set_draw_color,
+    },
+    enums::{Align, Color, Event, EventState, Font},
     frame::Frame,
     group::{Group, Pack, PackType, Scroll},
-    prelude::*,
+    prelude::{GroupExt, WidgetBase, WidgetExt},
 };
 use timer::Guard;
 
 use crate::simple_model::SimpleModel;
 
 pub struct JoeTable<T: SimpleModel + 'static> {
-    pub header: Frame,
-    pub scroll: Scroll,
-    pub table: Group,
+    pack: Pack,
+    header: Frame,
+    scroll: Scroll,
+    table: Group,
     pub model: Arc<Mutex<T>>,
+    pub selection: Arc<Mutex<Range<usize>>>,
+    font: Font,
+    font_size: i32,
 }
 
 impl<T: SimpleModel + 'static> Clone for JoeTable<T> {
     fn clone(&self) -> Self {
         Self {
+            pack: self.pack.clone(),
             header: self.header.clone(),
             scroll: self.scroll.clone(),
             table: self.table.clone(),
             model: self.model.clone(),
+            selection: self.selection.clone(),
+            font: self.font,
+            font_size: 10,
         }
     }
 }
 impl<T: SimpleModel> Deref for JoeTable<T> {
-    type Target = Scroll;
+    type Target = Pack;
 
     fn deref(&self) -> &Self::Target {
-        &self.scroll
+        &self.pack
     }
 }
 impl<T: SimpleModel> DerefMut for JoeTable<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.scroll
+        &mut self.pack
     }
 }
 impl<T> JoeTable<T>
@@ -61,26 +69,37 @@ where
         pack.end();
         let model = Arc::new(Mutex::new(model));
         let mut this = Self {
+            pack,
             header,
             scroll,
             table: table.clone(),
             model: model.clone(),
+            selection: Default::default(),
+            font: Font::Helvetica,
+            font_size: 12,
         };
         {
             let model = model.clone();
-            let this: JoeTable<T> = this.clone();
+            let mut this: JoeTable<T> = this.clone();
             table.handle(move |_table, e| {
                 if Event::Released == e {
                     if let Some((row, col)) = this.pos_to_row_col(app::event_x(), app::event_y()) {
-                        if col == 4 {
-                            model
-                                .lock()
-                                .unwrap()
-                                .cell_widget(row, col)
-                                .unwrap()
-                                .do_callback();
-                            return true;
+                        if let Some(mut w) = model.lock().unwrap().cell_widget(row, col) {
+                            w.do_callback();
+                        } else {
+                            if app::event_state().contains(EventState::Shift) {
+                                // range select
+                                let mut selection = this.selection.lock().unwrap();
+                                if selection.is_empty() {
+                                    selection.start = row as usize;
+                                }
+                                selection.end = row as usize + 1;
+                            } else {
+                                // single select
+                                this.select_row(row as usize);
+                            }
                         }
+                        return true;
                     }
                 }
                 false
@@ -88,6 +107,11 @@ where
         }
         this.init();
         this
+    }
+
+    pub fn set_font(&mut self, font: Font, font_size: i32) {
+        self.font = font;
+        self.font_size = font_size;
     }
 
     /// Redraw using a timer.  When the table is dropped, the timer task will be dropped.
@@ -113,7 +137,8 @@ where
             }));
     }
 
-    fn init(&mut self) {
+    /// This is done implicitely, but may need to be reinitialized if the model changes.
+    pub fn init(&mut self) {
         self.init_header();
         self.init_table();
     }
@@ -122,9 +147,10 @@ where
         let scroll = self.scroll.clone();
         let model = self.model.clone();
         let mut header = self.header.clone();
-        self.table.set_callback(|e| eprintln!(" table CB {e:?}"));
+        let new_font = self.font;
+        let new_font_size = self.font_size;
+        let selection = self.selection.clone();
         self.table.draw(move |table| {
-            let start = Instant::now();
             let mut model = model.lock().unwrap();
             let row_count = model.row_count() as i32;
 
@@ -135,11 +161,9 @@ where
                     .sum();
                 let height = model
                     .all_row_height()
-                    .map(|r| row_count as i32 * r as i32)
+                    .map(|r| row_count * r as i32)
                     .unwrap_or_else(|| {
-                        (0..row_count as i32)
-                            .map(|row| model.row_height(row) as i32)
-                            .sum()
+                        (0..row_count).map(|row| model.row_height(row) as i32).sum()
                     });
                 table.set_size(width, height);
             }
@@ -168,13 +192,19 @@ where
                     }
                     (first, last)
                 });
-            eprintln!("table size {first_row} - {last_row}");
 
             for row in first_row..last_row {
                 let mut x = table.x();
                 // use the all_row_height if available, otherwise use the row specific height
                 let height = Self::row_height(&mut model, row);
                 let y = table.y() + Self::row_y(&mut model, row);
+
+                let selected = selection.lock().unwrap().contains(&(row as usize));
+                let bg_color = if selected {
+                    Color::Blue.inactive()
+                } else {
+                    Color::White
+                };
 
                 // FIXME could optimize out columns that are not displayed
                 for col in 0i32..model.column_count() as i32 {
@@ -183,11 +213,14 @@ where
 
                     // should we clip?
                     push_clip(x, y, width - 1, height - 1);
-                    set_draw_color(Color::Black);
+
                     if let Some(cell) = model.cell(row, col) {
+                        draw::set_font(new_font, new_font_size);
+                        draw_rect_fill(x, y, width, height, bg_color);
+                        set_draw_color(Color::Black);
                         draw_text2(&cell, x, y, width, height, Align::Left);
                     } else if let Some(cell) = model.cell_delegate(row, col) {
-                        cell.draw(row, col, x, y, width, height, false);
+                        cell.draw(row, col, x, y, width, height, selected);
                     } else if let Some(mut w) = model.cell_widget(row, col) {
                         w.set_pos(x, y);
                         w.set_size(width, height);
@@ -195,7 +228,7 @@ where
                         table.draw_child(&mut w);
                         table.remove(&w);
                     } else {
-                        draw_rect_fill(x, y, width, height, Color::Blue);
+                        draw_rect_fill(x, y, width, height, bg_color);
                     }
                     pop_clip();
                     x += width;
@@ -203,9 +236,7 @@ where
             }
             header.redraw();
 
-            sleep(0.01);
-
-            eprintln!("JoeTable redraw {:?}", Instant::now().duration_since(start));
+            //sleep(0.01);
         });
     }
 
@@ -213,12 +244,13 @@ where
         let model = self.model.clone();
         let table = self.table.clone();
         self.header.set_size(self.width_total(), 20);
+        let new_font = self.font;
+        let new_font_size = self.font_size;
         self.header.draw(move |frame| {
             let mut model = model.lock().unwrap();
             let height = frame.height();
             let mut x = table.x();
             let y = frame.y();
-            eprintln!(" header x:{x} height:{height}");
             for col in 0..model.column_count() {
                 let width = model.column_width(col) as i32;
                 draw_rect_fill(x, y, width, height, Color::White);
@@ -226,7 +258,10 @@ where
                 // should we clip?
                 set_draw_color(Color::Black);
                 let cell = model.header(col);
+                let font = font();
+                draw::set_font(new_font, new_font_size);
                 draw_text2(&cell, x, y, width, height, Align::Left);
+                set_font(font);
                 x += width;
             }
         });
@@ -295,6 +330,28 @@ where
             .map(|h| h as i32 * row)
             .unwrap_or_else(|| model.row_height(row) as i32)
     }
+
+    pub fn row_count(&self) -> usize {
+        self.model.lock().unwrap().row_count()
+    }
+    pub fn column_count(&self) -> usize {
+        self.model.lock().unwrap().column_count()
+    }
+    pub fn cell(&self, row: usize, column: usize) -> Option<String> {
+        self.model.lock().unwrap().cell(row as i32, column as i32)
+    }
+
+    pub fn select_rows(&mut self, selection: Range<usize>) {
+        *(self.selection.lock().unwrap()) = selection;
+    }
+
+    pub fn select_row(&mut self, row: usize) {
+        self.select_rows(row..row + 1);
+    }
+
+    pub fn get_selection(&self) -> Range<usize> {
+        self.selection.lock().unwrap().clone()
+    }
 }
 
 // replace with library fn when found.  The only known binary search is on slices, which would force us to have an allocation for every row.
@@ -312,6 +369,7 @@ fn bin_search(size: usize, measure_fn: &mut impl FnMut(usize) -> Ordering) -> us
     }
     m
 }
+
 fn bin_find(size: usize, measure_fn: &mut impl FnMut(usize) -> Ordering) -> Option<usize> {
     let m = bin_search(size, measure_fn);
     if measure_fn(m) == Ordering::Equal {
