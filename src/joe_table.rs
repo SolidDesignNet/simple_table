@@ -16,7 +16,7 @@ use fltk::{
 };
 use timer::Guard;
 
-use crate::simple_model::SimpleModel;
+use crate::simple_model::{RowHeight, SimpleCell, SimpleModel};
 
 pub struct JoeTable<T: SimpleModel + 'static> {
     pack: Pack,
@@ -84,19 +84,22 @@ where
             table.handle(move |_table, e| {
                 if Event::Released == e {
                     if let Some((row, col)) = this.pos_to_row_col(app::event_x(), app::event_y()) {
-                        if let Some(mut w) = model.lock().unwrap().cell_widget(row, col) {
-                            w.do_callback();
-                        } else {
-                            if app::event_state().contains(EventState::Shift) {
-                                // range select
-                                let mut selection = this.selection.lock().unwrap();
-                                if selection.is_empty() {
-                                    selection.start = row as usize;
+                        match model.lock().unwrap().get_cell(row, col) {
+                            SimpleCell::Widget(mut w) => {
+                                w.do_callback();
+                            }
+                            _ => {
+                                if app::event_state().contains(EventState::Shift) {
+                                    // range select
+                                    let mut selection = this.selection.lock().unwrap();
+                                    if selection.is_empty() {
+                                        selection.start = row as usize;
+                                    }
+                                    selection.end = row as usize + 1;
+                                } else {
+                                    // single select
+                                    this.select_row(row as usize);
                                 }
-                                selection.end = row as usize + 1;
-                            } else {
-                                // single select
-                                this.select_row(row as usize);
                             }
                         }
                         return true;
@@ -152,50 +155,48 @@ where
         let selection = self.selection.clone();
         self.table.draw(move |table| {
             let mut model = model.lock().unwrap();
-            let row_count = model.row_count() as i32;
+            let row_info = model.row_info();
+            let row_count = row_info.count as i32;
 
             {
                 // calculate total size for the scrolbar
-                let width = (0..model.column_count())
-                    .map(|c| model.column_width(c) as i32)
+                let width = model
+                    .column_info()
+                    .details
+                    .iter()
+                    .map(|d| d.width as i32)
                     .sum();
-                let height = model
-                    .all_row_height()
-                    .map(|r| row_count * r as i32)
-                    .unwrap_or_else(|| {
-                        (0..row_count).map(|row| model.row_height(row) as i32).sum()
-                    });
-                table.set_size(width, height);
+                let height = row_info.height.for_range(0..row_count as u32);
+                table.set_size(width, height as i32);
             }
 
             // calculate which rows need redrawn
-            let (first_row, last_row) = model
-                .all_row_height()
-                .map(|h| {
+            let (first_row, last_row) = match row_info.height {
+                RowHeight::All(h) => {
                     let h = h as i32;
                     let first = scroll.yposition() / h;
                     let last = 2 + first + scroll.height() / h;
                     (first, i32::min(row_count, last))
-                })
-                .unwrap_or_else(|| {
+                }
+                RowHeight::PerRow(f) => {
                     let mut first = 0;
                     let mut h = scroll.yposition();
                     while h > table.y() {
-                        h -= model.row_height(first) as i32;
+                        h -= f(first) as i32;
                         first += 1;
                     }
                     let mut last = first;
                     let mut h = scroll.height();
                     while h >= table.y() {
-                        h -= model.row_height(last) as i32;
+                        h -= f(last) as i32;
                         last += 1;
                     }
-                    (first, last)
-                });
+                    (first as i32, last as i32)
+                }
+            };
 
             for row in first_row..last_row {
                 let mut x = table.x();
-                // use the all_row_height if available, otherwise use the row specific height
                 let height = Self::row_height(&mut model, row);
                 let y = table.y() + Self::row_y(&mut model, row);
 
@@ -207,28 +208,34 @@ where
                 };
 
                 // FIXME could optimize out columns that are not displayed
-                for col in 0i32..model.column_count() as i32 {
-                    let width = model.column_width(col as usize) as i32;
+                let column_info = model.column_info();
+                for col in 0i32..column_info.details.len() as i32 {
+                    let width = column_info.details[col as usize].width as i32;
                     draw_frame("LLTT", x, y, width, height);
 
                     // should we clip?
                     push_clip(x, y, width - 1, height - 1);
 
-                    if let Some(cell) = model.cell(row, col) {
-                        draw::set_font(new_font, new_font_size);
-                        draw_rect_fill(x, y, width, height, bg_color);
-                        set_draw_color(Color::Black);
-                        draw_text2(&cell, x, y, width, height, Align::Left);
-                    } else if let Some(cell) = model.cell_delegate(row, col) {
-                        cell.draw(row, col, x, y, width, height, selected);
-                    } else if let Some(mut w) = model.cell_widget(row, col) {
-                        w.set_pos(x, y);
-                        w.set_size(width, height);
-                        table.add(&w);
-                        table.draw_child(&mut w);
-                        table.remove(&w);
-                    } else {
-                        draw_rect_fill(x, y, width, height, bg_color);
+                    match model.get_cell(row, col) {
+                        SimpleCell::Text(cell) => {
+                            draw::set_font(new_font, new_font_size);
+                            draw_rect_fill(x, y, width, height, bg_color);
+                            set_draw_color(Color::Black);
+                            draw_text2(&cell, x, y, width, height, Align::Left);
+                        }
+                        SimpleCell::Delegate(cell) => {
+                            cell.draw(row, col, x, y, width, height, selected);
+                        }
+                        SimpleCell::Widget(mut w) => {
+                            w.set_pos(x, y);
+                            w.set_size(width, height);
+                            table.add(&w);
+                            table.draw_child(&mut w);
+                            table.remove(&w);
+                        }
+                        SimpleCell::None => {
+                            draw_rect_fill(x, y, width, height, bg_color);
+                        }
                     }
                     pop_clip();
                     x += width;
@@ -251,13 +258,13 @@ where
             let height = frame.height();
             let mut x = table.x();
             let y = frame.y();
-            for col in 0..model.column_count() {
-                let width = model.column_width(col) as i32;
+            for col in model.column_info().details {
+                let width = col.width as i32;
                 draw_rect_fill(x, y, width, height, Color::White);
                 draw_frame("AADD", x, y, width, height);
                 // should we clip?
                 set_draw_color(Color::Black);
-                let cell = model.header(col);
+                let cell = col.header.clone();
                 let font = font();
                 draw::set_font(new_font, new_font_size);
                 draw_text2(&cell, x, y, width, height, Align::Left);
@@ -268,9 +275,7 @@ where
     }
     fn width_total(&self) -> i32 {
         let mut model = self.model.lock().unwrap();
-        (0..model.column_count())
-            .map(|c| model.column_width(c) as i32)
-            .sum()
+        model.column_info().total_width() as i32
     }
 
     fn pos_to_row_col(&self, event_x: i32, event_y: i32) -> Option<(i32, i32)> {
@@ -278,7 +283,7 @@ where
         let y = event_y - self.table.y();
         let model = &mut self.model.lock().unwrap();
 
-        let row = bin_search(model.row_count(), &mut |row: usize| {
+        let row = bin_search(model.row_info().count, &mut |row: usize| {
             let row = row as i32;
             let row_y = Self::row_y(model, row);
             let row_y2 = row_y + Self::row_height(model, row);
@@ -291,7 +296,7 @@ where
             }
         });
 
-        let column = bin_search(model.column_count(), &mut |col| {
+        let column = bin_search(model.column_info().details.len(), &mut |col| {
             let col = col as i32;
             let col_x = Self::col_x(model, col);
             let col_x2 = col_x + Self::col_width(model, col);
@@ -307,38 +312,25 @@ where
     }
 
     fn col_width(model: &mut std::sync::MutexGuard<'_, T>, col: i32) -> i32 {
-        model.column_width(col as usize) as i32
+        model.column_info().details[col as usize].width as i32
     }
+
     fn col_x(model: &mut std::sync::MutexGuard<'_, T>, col: i32) -> i32 {
-        let mut x = 0;
-        for col in 0..col {
-            x += model.column_width(col as usize) as i32
-        }
-        x
+        model
+            .column_info()
+            .details
+            .iter()
+            .take(col as usize)
+            .map(|c| c.width as i32)
+            .sum()
     }
 
     fn row_height(model: &mut std::sync::MutexGuard<'_, T>, row: i32) -> i32 {
-        model
-            .all_row_height()
-            .map(|h| h as i32)
-            .unwrap_or_else(|| model.row_height(row) as i32)
+        model.row_info().height.for_row(row as u32) as i32
     }
 
     fn row_y(model: &mut std::sync::MutexGuard<'_, T>, row: i32) -> i32 {
-        model
-            .all_row_height()
-            .map(|h| h as i32 * row)
-            .unwrap_or_else(|| model.row_height(row) as i32)
-    }
-
-    pub fn row_count(&self) -> usize {
-        self.model.lock().unwrap().row_count()
-    }
-    pub fn column_count(&self) -> usize {
-        self.model.lock().unwrap().column_count()
-    }
-    pub fn cell(&self, row: usize, column: usize) -> Option<String> {
-        self.model.lock().unwrap().cell(row as i32, column as i32)
+        model.row_info().height.for_range(0..row as u32) as i32
     }
 
     pub fn select_rows(&mut self, selection: Range<usize>) {

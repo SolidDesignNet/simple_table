@@ -1,7 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use fltk::{app, prelude::*, window::Window};
-use simple_table::{simple_model::{DrawDelegate, Order, SimpleModel}, simple_table::*, spark_line::SparkLine};
+use simple_table::{
+    simple_model::{SimpleCell, SimpleModel},
+    simple_table::*,
+    spark_line::SparkLine,
+};
 use timer::Timer;
 
 // Example BusinessObject representing a row
@@ -17,53 +21,21 @@ struct SignalModel {
 
 // Example model implementation
 impl SimpleModel for SignalModel {
-    fn row_count(&mut self) -> usize {
-        self.signals.lock().unwrap().len()
-    }
 
-    fn column_count(&mut self) -> usize {
-        3
-    }
-
-    fn header(&mut self, col: usize) -> String {
+    fn get_cell(&mut self, row: i32, col: i32) -> SimpleCell {
         match col {
-            0 => "Signal".to_string(),
-            1 => "Value".to_string(),
-            2 => "Spark".to_string(),
-            _ => "XXX".to_string(),
-        }
-    }
-
-    fn column_width(&mut self, col: usize) -> u32 {
-        match col {
-            0 => 120,
-            1 => 60,
-            2 => 240,
-            _ => 60,
-        }
-    }
-
-    fn cell(&mut self, row: i32, col: i32) -> Option<String> {
-        match col {
-            0 => Some(self.signals.lock().unwrap()[row as usize].name.to_string()),
-            1 => Some(
+            0 => SimpleCell::Text(self.signals.lock().unwrap()[row as usize].name.to_string()),
+            1 => SimpleCell::Text(
                 self.signals.lock().unwrap()[row as usize]
                     .values
                     .last()
                     .unwrap()
                     .to_string(),
             ),
-            _ => None,
-        }
-    }
-
-    fn cell_delegate(&mut self, row: i32, col: i32) -> Option<Box<dyn DrawDelegate>> {
-        match col {
-            2 => {
-                let data = self.signals.lock().unwrap()[row as usize].values.clone();
-                Some(Box::new(SparkLine::new(data)))
-            }
-            _ => None,
+            2 => SimpleCell::Delegate(Box::new(SparkLine::new(
+                self.signals.lock().unwrap()[row as usize].values.clone(),
+            ))),
+            _ => SimpleCell::None,
         }
     }
 
@@ -77,7 +49,31 @@ impl SimpleModel for SignalModel {
         })
     }
 
-    fn sort(&mut self, _col: usize, _order: Order) {}
+    fn row_info(&mut self) -> simple_table::simple_model::RowInfo {
+        simple_table::simple_model::RowInfo {
+            count: self.signals.lock().unwrap().len(),
+            height: simple_table::simple_model::RowHeight::All(20),
+        }
+    }
+
+    fn column_info(&mut self) -> simple_table::simple_model::ColumnInfo {
+        simple_table::simple_model::ColumnInfo {
+            details: vec![
+                simple_table::simple_model::ColumnDetail {
+                    header: "Signal".to_string(),
+                    width: 120,
+                },
+                simple_table::simple_model::ColumnDetail {
+                    header: "Value".to_string(),
+                    width: 60,
+                },
+                simple_table::simple_model::ColumnDetail {
+                    header: "Spark".to_string(),
+                    width: 240,
+                },
+            ],
+        }
+    }
 }
 
 /// demonstration of table with Spark Line.
@@ -126,7 +122,7 @@ fn main() {
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     });
-    
+
     // create an app with a scroll with a table of PersonModel
     let app = app::App::default();
     let mut wind = Window::default().with_size(200, 300).with_label("Counter");

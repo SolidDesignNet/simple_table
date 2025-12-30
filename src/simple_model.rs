@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use fltk::widget::Widget;
 
 // Sort order
@@ -22,39 +24,76 @@ impl Order {
         }
     }
 }
-/// Custom renderer
+
+/// Custom renderer without the overhead of creating a full widget
 pub trait DrawDelegate {
     fn draw(&self, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32, selected: bool);
+}
+
+pub enum RowHeight {
+    All(u32),
+    PerRow(Box<dyn Fn(usize) -> u32>),
+}
+impl RowHeight {
+    pub fn for_row(&self, row: u32) -> u32 {
+        match self {
+            RowHeight::All(h) => *h,
+            RowHeight::PerRow(f) => f(row as usize),
+        }
+    }
+    pub fn for_range(&self, range: Range<u32>) -> u32 {
+        match self {
+            RowHeight::All(h) => h * (range.end - range.start),
+            RowHeight::PerRow(f) => range.map(|r| f(r as usize)).sum(),
+        }
+    }
+}
+
+pub struct RowInfo {
+    pub count: usize,
+    pub height: RowHeight,
+}
+
+pub struct ColumnDetail {
+    pub header: String,
+    pub width: u32,
+}
+
+pub struct ColumnInfo {
+    pub details: Vec<ColumnDetail>,
+}
+impl ColumnInfo {
+    /// Total width of all columns
+    pub fn total_width(&self) -> usize {
+        self.details.iter().map(|d| d.width as usize).sum()
+    }
+}
+
+pub enum SimpleCell {
+    Text(String),
+    Delegate(Box<dyn DrawDelegate>),
+    Widget(Widget),
+    None,
+}
+
+impl SimpleCell {
+    /// Used by copy/paste and export functions
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            SimpleCell::Text(s) => Some(s),
+            _ => None,
+        }
+    }
 }
 
 /// Table model trait. Implementations of this trait will describe how to display a table.
 // FIXME use i32 or u32 consistently!
 pub trait SimpleModel {
-    /// How many rows in the table?
-    fn row_count(&mut self) -> usize;
-    /// How many columns in the table?
-    fn column_count(&mut self) -> usize;
-    /// Table header (column titles)
-    fn header(&mut self, col: usize) -> String;
-    /// default column widths.  They are resizable by the user, but default to this size.
-    fn column_width(&mut self, col: usize) -> u32;
+    fn row_info(&mut self) -> RowInfo;
+    fn column_info(&mut self) -> ColumnInfo;
 
-    fn all_row_height(&mut self) -> Option<u32> {
-        Some(20)
-    }
-    fn row_height(&mut self, _row: i32) -> u32 {
-        self.all_row_height().unwrap_or_default()
-    }
+    fn get_cell(&mut self, row: i32, col: i32) -> SimpleCell;
 
-    /// if cell returns None, then cell_delegate is called
-    fn cell(&mut self, row: i32, col: i32) -> Option<String>;
-    /// Custom renderer.
-    fn cell_delegate(&mut self, _row: i32, _col: i32) -> Option<Box<dyn DrawDelegate>> {
-        None
-    }
-    fn cell_widget(&mut self, _row: i32, _col: i32) -> Option<Widget> {
-        None
-    }
     /// Popup help.
     fn hover(&self, _row: i32, _col: i32) -> Option<String> {
         None

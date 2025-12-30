@@ -1,6 +1,6 @@
 [package]
 name = "simple_table"
-version = "0.3.1"
+version = "0.5.1"
 edition = "2021"
 license = "MIT"
 description = "Model driven FTLK table support."

@@ -15,7 +15,7 @@ use fltk::{
 };
 use timer::Guard;
 
-use crate::simple_model::{Order, SimpleModel};
+use crate::simple_model::{Order, SimpleCell, SimpleModel};
 
 /// Define a FLTK table with a data model
 pub struct SimpleTable<T>
@@ -53,10 +53,10 @@ where
     pub fn new(mut table: Table, mut model: T) -> SimpleTable<T> {
         // initialize table
         {
-            table.set_cols(model.column_count() as i32);
+            table.set_cols(model.column_info().details.len() as i32);
             table.set_col_header(true);
-            for i in 0..model.column_count() {
-                table.set_col_width(i as i32, model.column_width(i) as i32);
+            for i in 0..model.column_info().details.len() {
+                table.set_col_width(i as i32, model.column_info().details[i].width as i32);
             }
             table.set_col_resize(true);
         }
@@ -140,20 +140,13 @@ where
                     match ctx {
                         TableContext::StartPage => draw::set_font(font, font_size),
                         TableContext::ColHeader => {
-                            let txt = model.lock().unwrap().header(col as usize);
-                            draw_header(&txt, x, y, w, h)
+                            let column_info = model.lock().unwrap().column_info();
+                            let txt = column_info.details[col as usize].header.as_str();
+                            draw_header(txt, x, y, w, h)
                         }
                         //TableContext::RowHeader => J1939Table::draw_header(&format!("{}", row + 1), x, y, w, h), // Row titles
                         TableContext::RowHeader => {}
                         TableContext::Cell => {
-                            let (value, draw_delegate) = {
-                                let mut m = model.lock().unwrap();
-                                // otherwise we'll draw the text
-                                (
-                                    m.cell(row, col).unwrap_or_default(),
-                                    m.cell_delegate(row, col),
-                                )
-                            };
                             draw::push_clip(x, y, w, h);
                             let selected = t.is_selected(row, col);
                             // FIXME use L&F
@@ -163,11 +156,11 @@ where
                                 draw::set_draw_color(enums::Color::White);
                             }
                             draw::draw_rectf(x, y, w, h);
-                            match draw_delegate {
-                                Some(dd) => {
+                            match model.lock().unwrap().get_cell(row, col) {
+                                SimpleCell::Delegate(dd) => {
                                     dd.draw(row, col, x, y, w, h, t.is_selected(row, col));
                                 }
-                                None => {
+                                SimpleCell::Text(value) => {
                                     let str = value.as_str();
                                     let calc_height = (4 + draw::height())
                                         * (1 + str.matches("\n").count() as i32);
@@ -182,6 +175,8 @@ where
                                         enums::Align::Left,
                                     );
                                 }
+                                SimpleCell::Widget(widget) => todo!(),
+                                SimpleCell::None => todo!(),
                             }
                             draw::set_draw_color(enums::Color::Light3);
                             draw::draw_rect(x, y, w, h);
@@ -214,7 +209,10 @@ where
     pub fn redraw(&mut self) {
         let (row_count, col_count) = {
             let mut simple_model = self.model.lock().unwrap();
-            (simple_model.row_count(), simple_model.column_count())
+            (
+                simple_model.row_info().count,
+                simple_model.column_info().details.len(),
+            )
         };
         self.table.set_rows(row_count as i32);
         self.table.set_cols(col_count as i32);
@@ -240,7 +238,10 @@ where
                     {
                         let (rc, cc) = {
                             let mut simple_model = model.lock().unwrap();
-                            (simple_model.row_count(), simple_model.column_count())
+                            (
+                                simple_model.row_info().count,
+                                simple_model.column_info().details.len(),
+                            )
                         };
                         table.set_rows(rc as i32);
                         table.set_cols(cc as i32);
@@ -257,11 +258,11 @@ where
     pub fn copy(&self, col_delimiter: &str, row_delimier: &str) -> String {
         let model = &mut self.model.lock().unwrap();
         let mut str = String::new();
-        for row in 0..(model.row_count() as i32) {
-            for col in 0..(model.column_count() as i32) {
-                if let Some(c) = model.cell(row, col) {
-                    str.push_str(&c);
-                }
+        for row in 0..(model.row_info().count as i32) {
+            for col in 0..(model.column_info().details.len() as i32) {
+                let c = model.get_cell(row, col).as_str().unwrap_or("").to_string();
+                str.push_str(&c);
+
                 str.push_str(col_delimiter);
             }
             str.push_str(row_delimier);
